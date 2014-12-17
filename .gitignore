@@ -1,0 +1,13 @@
+*.[oa]
+*~
+*.swp
+*-swp
+*.dat
+*.jpg
+*.mov
+*.mp4
+bin/*
+!bin/README
+input/input_data
+output/scripts/*
+!output/scripts/template*
