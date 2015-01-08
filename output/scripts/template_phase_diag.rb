@@ -6,8 +6,8 @@ require 'gnuplot'
 # data file parameters
 INPUT_DATA_FILE = "../input_data"
 PARTICLE_TYPE = ["electrons", "ions"]
-BOT = 100 
-TOP = 500
+BOT = 0 
+TOP = 1000
 STEP = 100
 DT = 1.0e-2
 L = 100.0
@@ -23,8 +23,8 @@ velocity_limits = Array.new(count){Array.new(2,0.0)}
 f1 = File.open(INPUT_DATA_FILE, mode="r")
 a = f1.readlines
 (0..count-1).step do |index|
-  velocity_limits[index][0] = a[22+2*index].split[2].to_f
-  velocity_limits[index][1] = a[22+2*index+1].split[2].to_f
+  velocity_limits[index][0] = a[25+2*index].split[2].to_f
+  velocity_limits[index][1] = a[25+2*index+1].split[2].to_f
 end
 f1.close
  
