@@ -18,8 +18,11 @@ void charge_deposition(double *d_rho, particle *d_e, int num_e, particle *d_i, i
   /*--------------------------- function variables -----------------------*/
   
   // host memory
-  static const double ds = init_ds();   // spatial step
-  static const int nn = init_nn();      // number of nodes
+  static const double ds = init_ds();             // spatial step
+  static const double l_p = init_l_p();           // lengh of cilindrical probe
+  static const double r_p = init_r_p();           // probe radius
+  static const double theta = init_theta_p();     // angular amplitude of probe
+  static const int nn = init_nn();                // number of nodes
   
   dim3 griddim, blockdim;
   size_t sh_mem_size;
@@ -43,7 +46,7 @@ void charge_deposition(double *d_rho, particle *d_e, int num_e, particle *d_i, i
   
   // call to particle_to_grid kernel (electrons)
   cudaGetLastError();
-  particle_to_grid<<<griddim, blockdim, sh_mem_size>>>(ds, nn, d_rho, d_e, num_e, -1.0);
+  particle_to_grid<<<griddim, blockdim, sh_mem_size>>>(nn, ds, l_p, r_p, theta, d_rho, d_e, num_e, -1.0);
   cu_sync_check(__FILE__, __LINE__);
 
   // set dimensions of grid of blocks and block of threads for particle_to_grid kernel (ions)
@@ -52,7 +55,7 @@ void charge_deposition(double *d_rho, particle *d_e, int num_e, particle *d_i, i
   
   // call to particle_to_grid kernel (ions)
   cudaGetLastError();
-  particle_to_grid<<<griddim, blockdim, sh_mem_size>>>(ds, nn, d_rho, d_i, num_i, 1.0);
+  particle_to_grid<<<griddim, blockdim, sh_mem_size>>>(nn, ds, l_p, r_p, theta, d_rho, d_i, num_i, 1.0);
   cu_sync_check(__FILE__, __LINE__);
   
   return;
@@ -68,6 +71,7 @@ void poisson_solver(double max_error, double *d_rho, double *d_phi)
   static const double ds = init_ds();               // spatial step
   static const int nn = init_nn();                  // number of nodes
   static const double epsilon0 = init_epsilon0();   // electric permitivity of free space
+  static const double r_p = init_r_p();             // probe radius
   
   double *h_error;
   double t_error = max_error*10;
@@ -98,7 +102,7 @@ void poisson_solver(double max_error, double *d_rho, double *d_phi)
   while(min_iteration>=0 || t_error>=max_error) {
     // launch kernel for performing one jacobi iteration
     cudaGetLastError();
-    jacobi_iteration<<<griddim, blockdim, sh_mem_size>>>(nn, ds, epsilon0, d_rho, d_phi, d_error);
+    jacobi_iteration<<<griddim, blockdim, sh_mem_size>>>(nn, ds, r_p, epsilon0, d_rho, d_phi, d_error);
     cu_sync_check(__FILE__, __LINE__);
     
     // copy error vector from  device to host memory
@@ -156,7 +160,8 @@ void field_solver(double *d_phi, double *d_E)
 
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 
-__global__ void particle_to_grid(double ds, int nn, double *g_rho, particle *g_p, int num_p, double q)
+__global__ void particle_to_grid(int nn, double ds, double l_p, double r_p, double theta, double *g_rho, 
+                                 particle *g_p, int num_p, double q)
 {
   /*--------------------------- kernel variables -----------------------*/
   
@@ -201,11 +206,11 @@ __global__ void particle_to_grid(double ds, int nn, double *g_rho, particle *g_p
   //---- volume correction (shared memory)
   
   for (int i = tidx+1; i < nn-1; i+=bdim) {
-    sh_partial_rho[i] /= ds*ds*ds;
+    sh_partial_rho[i] /= l_p*ds*theta*(i*ds+r_p);
   }
   if (tidx == 0) {
-    sh_partial_rho[0] /= 0.5*ds*ds*ds;
-    sh_partial_rho[nn-1] /= 0.5*ds*ds*ds;
+    sh_partial_rho[0] /= 0.5*l_p*theta*ds*(r_p+0.25*ds);
+    sh_partial_rho[nn-1] /= 0.5*l_p*theta*ds*(r_p+(nn-1.25)*ds);
   }
   __syncthreads();
 
@@ -221,7 +226,7 @@ __global__ void particle_to_grid(double ds, int nn, double *g_rho, particle *g_p
 
 /**********************************************************/
 
-__global__ void jacobi_iteration (int nn, double ds, double epsilon0, double *g_rho, double *g_phi, double *g_error)
+__global__ void jacobi_iteration (int nn, double ds, double r_p, double epsilon0, double *g_rho, double *g_phi, double *g_error)
 {
   /*----------------------------- function body -------------------------*/
   
@@ -258,7 +263,7 @@ __global__ void jacobi_iteration (int nn, double ds, double epsilon0, double *g_
   __syncthreads();
   
   // actualize interior mesh points
-  if (g_tid < nn - 1) new_phi = 0.5*(dummy_rho + sh_old_phi[sh_tid-1] + sh_old_phi[sh_tid+1]);
+  if (g_tid < nn - 1) new_phi = 0.5*(dummy_rho + sh_old_phi[sh_tid-1]*(1.0+ds/(2.0*(g_tid*ds+r_p))) + sh_old_phi[sh_tid+1]*(1.0-ds/(2.0*(g_tid*ds+r_p))));
   __syncthreads();
   
   // store new values of phi in global memory

@@ -174,7 +174,7 @@ double eval_particle_energy(double *d_phi,  particle *d_p, double m, double q, i
 
 void particles_snapshot(particle *d_p, int num_p, string filename)
 {
-  /*--------------------------- function variables -----------------------*/
+  /*--------------------------- function variables ----------------------*/
   
   // host memory
   particle *h_p;
@@ -197,7 +197,7 @@ void particles_snapshot(particle *d_p, int num_p, string filename)
   filename.append(".dat");
   pFile = fopen(filename.c_str(), "w");
   for (int i = 0; i < num_p; i++) {
-    fprintf(pFile, " %.17e %.17e \n", h_p[i].r, h_p[i].v);
+    fprintf(pFile, " %.17e %.17e %.17e \n", h_p[i].r, h_p[i].vr, h_p[i].vt);
   }
   fclose(pFile);
   
@@ -549,7 +549,7 @@ __global__ void particle2df(double *g_avg_ddf, int n_bin_ddf, double L, double *
     bin_size = L/n_vdf;
     vdf_index = __double2int_rd(reg_p.r/bin_size);
     bin_size = (vmax-vmin)/double(n_bin_vdf);
-    bin_index = __double2int_rd((reg_p.v-vmin)/bin_size);
+    bin_index = __double2int_rd((reg_p.vr-vmin)/bin_size);
     if (bin_index < 0) {
       bin_index = 0;
     } else if (bin_index >= n_bin_vdf) {
@@ -622,7 +622,7 @@ __global__ void energy_kernel(double *g_U, double *g_phi, int nn, double ds,
     // evaluate potential energy of particle
     sh_U[tidx] = (sh_phi[ic]*(1.0-dist)+sh_phi[ic+1]*dist)*q;
     // evaluate kinetic energy of particle
-    sh_U[tidx] += 0.5*m*reg_p.v*reg_p.v;
+    sh_U[tidx] += 0.5*m*(reg_p.vr*reg_p.vr+reg_p.vt*reg_p.vt);
   }
   __syncthreads();
 

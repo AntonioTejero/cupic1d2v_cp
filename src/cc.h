@@ -33,7 +33,8 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
 
 // device kernels
 __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth, double vd, double qm, int nn, 
-                     double L, double fpt, double fvt, double tin, double dtin, curandStatePhilox4_32_10_t *state);
+                     double L, double r_p, double fpt, double fvt, double tin, double dtin, 
+                     curandStatePhilox4_32_10_t *state);
 __global__ void pRemover (particle *g_p, int *g_num_p, double L, int *g_num_abs_p);
 
 #endif 

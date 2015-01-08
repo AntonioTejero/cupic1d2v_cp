@@ -28,7 +28,8 @@
 void particle_mover(particle *d_e, int num_e, particle *d_i, int num_i, double *d_E);
 
 // device kernels
-__global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, double dt, double ds, int nn, double *g_E);
+__global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, double dt, double ds, 
+                               double r_p, int nn, double *g_E);
 
 // device functions 
 

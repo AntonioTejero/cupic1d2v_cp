@@ -30,7 +30,8 @@ using namespace std;
 struct particle
 {
   double r;
-  double v;
+  double vr;
+  double vt;
 };
 
 

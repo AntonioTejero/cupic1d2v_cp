@@ -121,10 +121,12 @@ void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, cu
   
   // host memory
   const double n = init_n();        // plasma density
-  const double mi = init_mi();      // ion's mass
   const double me = init_me();      // electron's mass
-  const double kti = init_kti();    // ion's thermal energy
+  const double mi = init_mi();      // ion's mass
   const double kte = init_kte();    // electron's thermal energy
+  const double kti = init_kti();    // ion's thermal energy
+  const double vd_e = init_vd_e();  // electron's drift velocity
+  const double vd_i = init_vd_i();  // ion's drift velocity
   const double L = init_L();        // size of simulation
   const double ds = init_ds();      // spacial step
 
@@ -154,12 +156,12 @@ void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, cu
   
   // create particles (electrons)
   cudaGetLastError();
-  create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_e, *num_e, kte, me, L, *state);
+  create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_e, *num_e, sqrt(kte/me), vd_e, L, *state);
   cu_sync_check(__FILE__, __LINE__);
 
   // create particles (ions)
   cudaGetLastError();
-  create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_i, *num_i, kti, mi, L, *state);
+  create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_i, *num_i, sqrt(kti/mi), vd_i, L, *state);
   cu_sync_check(__FILE__, __LINE__);
 
   return;
@@ -410,7 +412,7 @@ void read_particle_file(string filename, particle **d_p, int *num_p)
     myfile.getline(line, 150);
     for (int i = 0; i<*num_p; i++) {
       myfile.getline(line, 150);
-      sscanf (line, " %le %le \n", &h_p[i].r, &h_p[i].v);
+      sscanf (line, " %le %le %le \n", &h_p[i].r, &h_p[i].vr, &h_p[i].vt);
     }
   } else {
     cout << "Error. Can't open " << filename << " file" << endl;
@@ -451,301 +453,6 @@ template <typename type> void read_input_file(type *data, int n)
   myfile.close();
   
   return;
-}
-
-/**********************************************************/
-
-double init_qi(void) 
-{
-  // function variables
-  
-  // function body
-  
-  return 1.0;
-}
-
-/**********************************************************/
-
-double init_qe(void) 
-{
-  // function variables
-  
-  // function body
-  
-  return -1.0;
-}
-
-/**********************************************************/
-
-double init_mi(void) 
-{
-  // function variables
-  static double gamma = 0.0;
-
-  // function body
-  
-  if (gamma == 0.0) read_input_file(&gamma, 12);
-  
-  return gamma;
-}
-
-/**********************************************************/
-
-double init_me(void) 
-{
-  // function variables
-  
-  // function body
-  
-  return 1.0;
-}
-
-/**********************************************************/
-
-double init_kti(void) 
-{ 
-  // function variables
-  static double beta = 0.0;
-  
-  // function body
-  
-  if (beta == 0.0) read_input_file(&beta, 9);
-  
-  return beta;
-}
-
-/**********************************************************/
-
-double init_kte(void) 
-{
-  // function variables
-  
-  // function body
-  
-  return 1.0;
-}
-
-/**********************************************************/
-
-double init_vd_i(void) 
-{ 
-  // function variables
-  static double vd_i = -10.0;
-  
-  // function body
-  
-  if (vd_i == -10.0) read_input_file(&vd_i, 11);
-  
-  return vd_i;
-}
-
-/**********************************************************/
-
-double init_vd_e(void) 
-{ 
-  // function variables
-  static double vd_e = -10.0;
-  
-  // function body
-  
-  if (vd_e == -10.0) read_input_file(&vd_e, 10);
-  
-  return vd_e;
-}
-
-/**********************************************************/
-
-double init_phi_p(void) 
-{
-  // function variables
-  static double phi_p = 0.0;
-  
-  // function body
-  
-  if (phi_p == 0.0) read_input_file(&phi_p, 14);
-  
-  return phi_p;
-}
-
-/**********************************************************/
-
-double init_n(void) 
-{
-  // function variables
-  const double Dl = init_Dl();
-  static double n = 0.0;
-  
-  // function body
-  
-  if (n == 0.0) {
-    read_input_file(&n, 7);
-    n *= Dl*Dl*Dl;
-  }
-  
-  return n;
-}
-
-/**********************************************************/
-
-double init_L(void) 
-{
-  // function variables
-  static double L = init_ds() * (double) init_nc();
-
-  // function body
-  
-  return L;
-}
-
-/**********************************************************/
-
-double init_ds(void) 
-{
-  // function variables
-  static double ds = 0.0;
-  
-  // function body
-  
-  if (ds == 0.0) read_input_file(&ds, 17);
-  
-  return ds;
-}
-
-/**********************************************************/
-
-double init_dt(void) 
-{
-  // function variables
-  static double dt = 0.0;
-  
-  // function body
-  
-  if (dt == 0.0) read_input_file(&dt, 18);
-  
-  return dt;
-}
-
-/**********************************************************/
-
-double init_epsilon0(void) 
-{
-  // function variables
-  double Te;
-  const double Dl = init_Dl();
-  static double epsilon0 = 0.0;
-  // function body
-  
-  if (epsilon0 == 0.0) {
-    read_input_file(&Te, 8);
-    epsilon0 = CST_EPSILON;                         // SI units
-    epsilon0 /= pow(Dl*sqrt(CST_ME/(CST_KB*Te)),2); // time units
-    epsilon0 /= CST_E*CST_E;                        // charge units
-    epsilon0 *= Dl*Dl*Dl;                           // length units
-    epsilon0 *= CST_ME;                             // mass units
-  }
-  
-  return epsilon0;
-}
-
-/**********************************************************/
-
-int init_nc(void) 
-{
-  // function variables
-  static int nc = 0;
-  
-  // function body
-  
-  if (nc == 0) read_input_file(&nc, 16);
-  
-  return nc;
-}
-
-/**********************************************************/
-
-int init_nn(void) 
-{
-  // function variables
-  static int nn = init_nc()+1;
-  
-  // function body
-  
-  return nn;
-}
-
-/**********************************************************/
-
-double init_dtin_i(void)
-{
-  // function variables
-  const double n = init_n();
-  const double ds = init_ds();
-  const double mi = init_mi();
-  const double kti = init_kti();
-  const double vd_i = init_vd_i();
-  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  const double phi_p = init_phi_p();
-  static double dtin_i = 0.0;
-  
-  // function body
-  
-  if (dtin_i == 0.0) {
-    dtin_i = n*sqrt(kti/(2.0*PI*mi))*exp(-0.5*mi*vd_i*vd_i/kti);  // thermal component of input flux
-    dtin_i += 0.5*n*vd_i*(1.0+erf(sqrt(0.5*mi/kti)*vd_i));        // drift component of input flux
-    dtin_i *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
-
-    dtin_i *= ds*ds;      // number of particles that enter the simulation per unit of time
-    dtin_i = 1.0/dtin_i;  // time between consecutive particles injection
-  }
-
-  return dtin_i;
-}
-
-/**********************************************************/
-
-double init_dtin_e(void)
-{
-  // function variables
-  const double n = init_n();
-  const double ds = init_ds();
-  const double me = init_me();
-  const double kte = init_kte();
-  const double vd_e = init_vd_e();
-  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  const double phi_p = init_phi_p();
-  static double dtin_e = 0.0;
-  
-  // function body
-  
-  if (dtin_e == 0.0) {
-    dtin_e = n*sqrt(kte/(2.0*PI*me))*exp(-0.5*me*vd_e*vd_e/kte);  // thermal component of input flux
-    dtin_e += 0.5*n*vd_e*(1.0+erf(sqrt(0.5*me/kte)*vd_e));        // drift component of input flux
-    dtin_e *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
-
-    dtin_e *= ds*ds;      // number of particles that enter the simulation per unit of time
-    dtin_e = 1.0/dtin_e;  // time between consecutive particles injection
-  }
-
-  return dtin_e;
-}
-
-/**********************************************************/
-
-double init_Dl(void)
-{
-  // function variables
-  double ne, Te;
-  static double Dl = 0.0;
-  
-  // function body
-  
-  if (Dl == 0.0) {
-    read_input_file(&ne, 7);
-    read_input_file(&Te, 8);
-    Dl = sqrt(CST_EPSILON*CST_KB*Te/(ne*CST_E*CST_E));
-  }
-  
-  return Dl;
 }
 
 /**********************************************************/
@@ -806,6 +513,222 @@ int init_n_fin(void)
 
 /**********************************************************/
 
+double init_n(void) 
+{
+  // function variables
+  const double Dl = init_Dl();
+  static double n = 0.0;
+  
+  // function body
+  
+  if (n == 0.0) {
+    read_input_file(&n, 7);
+    n *= Dl*Dl*Dl;
+  }
+  
+  return n;
+}
+
+/**********************************************************/
+
+double init_kte(void) 
+{
+  // function variables
+  
+  // function body
+  
+  return 1.0;
+}
+
+/**********************************************************/
+
+double init_kti(void) 
+{ 
+  // function variables
+  static double beta = 0.0;
+  
+  // function body
+  
+  if (beta == 0.0) read_input_file(&beta, 9);
+  
+  return beta;
+}
+
+/**********************************************************/
+
+double init_vd_e(void) 
+{ 
+  // function variables
+  static double vd_e = -1000.0;
+  
+  // function body
+  
+  if (vd_e == -1000.0) read_input_file(&vd_e, 10);
+  
+  return vd_e;
+}
+
+/**********************************************************/
+
+double init_vd_i(void) 
+{ 
+  // function variables
+  static double vd_i = -1000.0;
+  
+  // function body
+  
+  if (vd_i == -1000.0) read_input_file(&vd_i, 11);
+  
+  return vd_i;
+}
+
+/**********************************************************/
+
+double init_me(void) 
+{
+  // function variables
+  
+  // function body
+  
+  return 1.0;
+}
+
+/**********************************************************/
+
+double init_mi(void) 
+{
+  // function variables
+  static double gamma = 0.0;
+
+  // function body
+  
+  if (gamma == 0.0) read_input_file(&gamma, 12);
+  
+  return gamma;
+}
+
+/**********************************************************/
+
+double init_qe(void) 
+{
+  // function variables
+  
+  // function body
+  
+  return -1.0;
+}
+
+/**********************************************************/
+
+double init_qi(void) 
+{
+  // function variables
+  
+  // function body
+  
+  return 1.0;
+}
+
+/**********************************************************/
+
+double init_r_p(void) 
+{
+  // function variables
+  static double r_p = 0.0;
+  
+  // function body
+  
+  if (r_p == 0.0) read_input_file(&r_p, 14);
+  
+  return r_p;
+}
+
+/**********************************************************/
+
+double init_l_p(void) 
+{
+  // function variables
+  static double l_p = 0.0;
+  
+  // function body
+  
+  if (l_p == 0.0) read_input_file(&l_p, 15);
+  
+  return l_p;
+}
+
+/**********************************************************/
+
+double init_theta_p(void) 
+{
+  // function variables
+  static double theta_p = 0.0;
+  
+  // function body
+  
+  if (theta_p == 0.0) read_input_file(&theta_p, 16);
+  
+  return theta_p;
+}
+
+/**********************************************************/
+
+double init_phi_p(void) 
+{
+  // function variables
+  static double phi_p = 0.0;
+  
+  // function body
+  
+  if (phi_p == 0.0) read_input_file(&phi_p, 17);
+  
+  return phi_p;
+}
+
+/**********************************************************/
+
+int init_nc(void) 
+{
+  // function variables
+  static int nc = 0;
+  
+  // function body
+  
+  if (nc == 0) read_input_file(&nc, 19);
+  
+  return nc;
+}
+
+/**********************************************************/
+
+double init_ds(void) 
+{
+  // function variables
+  static double ds = 0.0;
+  
+  // function body
+  
+  if (ds == 0.0) read_input_file(&ds, 20);
+  
+  return ds;
+}
+
+/**********************************************************/
+
+double init_dt(void) 
+{
+  // function variables
+  static double dt = 0.0;
+  
+  // function body
+  
+  if (dt == 0.0) read_input_file(&dt, 21);
+  
+  return dt;
+}
+
+/**********************************************************/
+
 int init_n_bin_ddf(void)
 {
   // function variables
@@ -813,23 +736,9 @@ int init_n_bin_ddf(void)
   
   // function body
   
-  if (n_bin_ddf < 0) read_input_file(&n_bin_ddf, 20);
+  if (n_bin_ddf < 0) read_input_file(&n_bin_ddf, 23);
   
   return n_bin_ddf;
-}
-
-/**********************************************************/
-
-int init_n_bin_vdf(void)
-{
-  // function variables
-  static int n_bin_vdf = -1;
-  
-  // function body
-  
-  if (n_bin_vdf < 0) read_input_file(&n_bin_vdf, 22);
-  
-  return n_bin_vdf;
 }
 
 /**********************************************************/
@@ -841,37 +750,23 @@ int init_n_vdf(void)
   
   // function body
   
-  if (n_vdf < 0) read_input_file(&n_vdf, 21);
+  if (n_vdf < 0) read_input_file(&n_vdf, 24);
   
   return n_vdf;
 }
 
 /**********************************************************/
 
-double init_vth_e(void)
+int init_n_bin_vdf(void)
 {
   // function variables
-  static double kte = init_kte();         // thermal energy of electrons
-  static double me = init_me();           // electron mass
-  static double vth_e = sqrt(2*kte/me);   // thermal velocity of electrons
+  static int n_bin_vdf = -1;
   
   // function body
   
-  return vth_e;
-}
-
-/**********************************************************/
-
-double init_vth_i(void)
-{
-  // function variables
-  static double kti = init_kti();         // thermal energy of ions
-  static double mi = init_mi();           // ion mass
-  static double vth_i = sqrt(2*kti/mi);   // thermal velocity of ions
+  if (n_bin_vdf < 0) read_input_file(&n_bin_vdf, 25);
   
-  // function body
-  
-  return vth_i;
+  return n_bin_vdf;
 }
 
 /**********************************************************/
@@ -883,7 +778,7 @@ double init_v_max_e(void)
   
   // function body
 
-  if (v_max_e == 0) read_input_file(&v_max_e, 23);
+  if (v_max_e == 0) read_input_file(&v_max_e, 26);
   
   return v_max_e;
 }
@@ -897,7 +792,7 @@ double init_v_min_e(void)
   
   // function body
 
-  if (v_min_e == 0) read_input_file(&v_min_e, 24);
+  if (v_min_e == 0) read_input_file(&v_min_e, 27);
   
   return v_min_e;
 }
@@ -911,7 +806,7 @@ double init_v_max_i(void)
   
   // function body
 
-  if (v_max_i == 0) read_input_file(&v_max_i, 25);
+  if (v_max_i == 0) read_input_file(&v_max_i, 28);
   
   return v_max_i;
 }
@@ -925,7 +820,7 @@ double init_v_min_i(void)
   
   // function body
 
-  if (v_min_i == 0) read_input_file(&v_min_i, 26);
+  if (v_min_i == 0) read_input_file(&v_min_i, 29);
   
   return v_min_i;
 }
@@ -940,7 +835,7 @@ bool calibration_is_on(void)
   // function body
   
   if (calibration_int < 0) {
-    read_input_file(&calibration_int, 28);
+    read_input_file(&calibration_int, 31);
     if (calibration_int != 0 && calibration_int != 1) {
       cout << "Found error in input_data file. Wrong ion_current_calibration!\nStoping simulation.\n" << endl;
       exit(1);
@@ -961,7 +856,7 @@ bool floating_potential_is_on(void)
   // function body
   
   if (floating_potential_int < 0) {
-    read_input_file(&floating_potential_int , 30);
+    read_input_file(&floating_potential_int , 33);
     if (floating_potential_int != 0 && floating_potential_int != 1) {
       cout << "Found error in input_data file. Wrong floating_potential!\nStoping simulation.\n" << endl;
       exit(1);
@@ -971,6 +866,162 @@ bool floating_potential_is_on(void)
   if (floating_potential_int == 1) return true;
   else return false;
 }
+
+/**********************************************************/
+
+double init_dtin_e(void)
+{
+  // function variables
+  const double n = init_n();
+  const double l_p = init_l_p();
+  const double r_p = init_r_p();
+  const double theta = init_theta_p();
+  const double L = init_L();
+  const double me = init_me();
+  const double kte = init_kte();
+  const double vd_e = init_vd_e();
+  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
+  const double phi_p = init_phi_p();
+  static double dtin_e = 0.0;
+  
+  // function body
+  
+  if (dtin_e == 0.0) {
+    dtin_e = n*sqrt(kte/(2.0*PI*me))*exp(-0.5*me*vd_e*vd_e/kte);  // thermal component of input flux
+    dtin_e += 0.5*n*(-vd_e)*(1.0+erf(sqrt(0.5*me/kte)*(-vd_e)));  // drift component of input flux
+    dtin_e *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
+
+    dtin_e *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
+    dtin_e = 1.0/dtin_e;              // time between consecutive particles injection
+  }
+
+  return dtin_e;
+}
+
+/**********************************************************/
+
+double init_dtin_i(void)
+{
+  // function variables
+  const double n = init_n();
+  const double l_p = init_l_p();
+  const double r_p = init_r_p();
+  const double theta = init_theta_p();
+  const double L = init_L();
+  const double mi = init_mi();
+  const double kti = init_kti();
+  const double vd_i = init_vd_i();
+  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
+  const double phi_p = init_phi_p();
+  static double dtin_i = 0.0;
+  
+  // function body
+  
+  if (dtin_i == 0.0) {
+    dtin_i = n*sqrt(kti/(2.0*PI*mi))*exp(-0.5*mi*vd_i*vd_i/kti);  // thermal component of input flux
+    dtin_i += 0.5*n*(-vd_i)*(1.0+erf(sqrt(0.5*mi/kti)*(-vd_i)));  // drift component of input flux
+    dtin_i *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
+
+    dtin_i *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
+    dtin_i = 1.0/dtin_i;              // time between consecutive particles injection
+  }
+
+  return dtin_i;
+}
+
+/**********************************************************/
+
+int init_nn(void) 
+{
+  // function variables
+  static int nn = init_nc()+1;
+  
+  // function body
+  
+  return nn;
+}
+
+/**********************************************************/
+
+double init_L(void) 
+{
+  // function variables
+  static double L = init_ds() * (double) init_nc();
+
+  // function body
+  
+  return L;
+}
+
+/**********************************************************/
+
+double init_epsilon0(void) 
+{
+  // function variables
+  double Te;
+  const double Dl = init_Dl();
+  static double epsilon0 = 0.0;
+  // function body
+  
+  if (epsilon0 == 0.0) {
+    read_input_file(&Te, 8);
+    epsilon0 = CST_EPSILON;         // SI units
+    epsilon0 *= CST_KB*Te;          // energy units
+    epsilon0 /= CST_E*CST_E;        // charge units
+    epsilon0 *= Dl;                 // length units
+  }
+  
+  return epsilon0;
+}
+
+/**********************************************************/
+
+double init_Dl(void)
+{
+  // function variables
+  double ne, Te;
+  static double Dl = 0.0;
+  
+  // function body
+  
+  if (Dl == 0.0) {
+    read_input_file(&ne, 7);
+    read_input_file(&Te, 8);
+    Dl = sqrt(CST_EPSILON*CST_KB*Te/(ne*CST_E*CST_E));
+  }
+  
+  return Dl;
+}
+
+/**********************************************************/
+
+double init_vth_e(void)
+{
+  // function variables
+  static double kte = init_kte();         // thermal energy of electrons
+  static double me = init_me();           // electron mass
+  static double vth_e = sqrt(kte/me);     // thermal velocity of electrons
+  
+  // function body
+  
+  return vth_e;
+}
+
+/**********************************************************/
+
+double init_vth_i(void)
+{
+  // function variables
+  static double kti = init_kti();         // thermal energy of ions
+  static double mi = init_mi();           // ion mass
+  static double vth_i = sqrt(kti/mi);     // thermal velocity of ions
+  
+  // function body
+  
+  return vth_i;
+}
+
+/**********************************************************/
 
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 
@@ -1000,7 +1051,7 @@ __global__ void init_philox_state(curandStatePhilox4_32_10_t *state)
 
 /**********************************************************/
 
-__global__ void create_particles_kernel(particle *g_p, int num_p, double kt, double m, double L, 
+__global__ void create_particles_kernel(particle *g_p, int num_p, double sigma, double vd, double L, 
                                         curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- kernel variables -----------------------*/
@@ -1009,11 +1060,10 @@ __global__ void create_particles_kernel(particle *g_p, int num_p, double kt, dou
   
   // kernel registers
   particle reg_p;
-  double sigma = sqrt(kt/m);
   int tid = (int) threadIdx.x + (int) blockIdx.x * (int) blockDim.x;
   int bdim = (int) blockDim.x;
   curandStatePhilox4_32_10_t local_state;
-  double rnd;
+  double2 rnd;
   
   /*--------------------------- kernel body ----------------------------*/
   
@@ -1022,10 +1072,11 @@ __global__ void create_particles_kernel(particle *g_p, int num_p, double kt, dou
   
   //---- create particles 
   for (int i = tid; i < num_p; i+=bdim) {
-    rnd = curand_uniform_double(&local_state);
-    reg_p.r = rnd*L;
-    rnd = curand_normal_double(&local_state);
-    reg_p.v = rnd*sigma;
+    rnd.x = curand_uniform_double(&local_state);
+    reg_p.r = rnd.x*L;
+    rnd = curand_normal2_double(&local_state);
+    reg_p.vr = rnd.x*sigma+vd;
+    reg_p.vt = rnd.y*sigma;
     // store particles in global memory
     g_p[i] = reg_p;
   }
@@ -1075,7 +1126,7 @@ __global__ void fix_velocity(double q, double m, int num_p, particle *g_p, doubl
     F = q*(sh_E[ic]*(1-dist)+sh_E[ic+1]*dist);
 
     // fix particle velocities
-    reg_p.v -= 0.5*dt*F/m;
+    reg_p.vr -= 0.5*dt*F/m;
 
     // store back particles in global memory
     g_p[i] = reg_p;

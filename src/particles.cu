@@ -23,6 +23,7 @@ void particle_mover(particle *d_e, int num_e, particle *d_i, int num_i, double *
   static const double qe = init_qe();     // electron's charge
   static const double qi = init_qi();     // ions's charge
   static const double ds = init_ds();     // spatial step
+  static const double r_p = init_r_p();   // spatial step
   static const double dt = init_dt();     // time step
   static const int nn = init_nn();        // number of nodes  
   
@@ -44,7 +45,7 @@ void particle_mover(particle *d_e, int num_e, particle *d_i, int num_i, double *
 
   // call to leap_frog_step kernel (electrons)
   cudaGetLastError();
-  leap_frog_step<<<griddim, blockdim, sh_mem_size>>>(qe, me, num_e, d_e, dt, ds, nn, d_E);
+  leap_frog_step<<<griddim, blockdim, sh_mem_size>>>(qe, me, num_e, d_e, dt, ds, r_p, nn, d_E);
   cu_sync_check(__FILE__, __LINE__);
    
   //---- move ions  
@@ -55,7 +56,7 @@ void particle_mover(particle *d_e, int num_e, particle *d_i, int num_i, double *
  
   // call to leap_frog_step kernel (ions)
   cudaGetLastError();
-  leap_frog_step<<<griddim, blockdim, sh_mem_size>>>(qi, mi, num_i, d_i, dt, ds, nn, d_E);
+  leap_frog_step<<<griddim, blockdim, sh_mem_size>>>(qi, mi, num_i, d_i, dt, ds, r_p, nn, d_E);
   cu_sync_check(__FILE__, __LINE__);
   
   return;
@@ -67,7 +68,8 @@ void particle_mover(particle *d_e, int num_e, particle *d_i, int num_i, double *
 
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 
-__global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, double dt, double ds, int nn, double *g_E)
+__global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, double dt, double ds, 
+                               double r_p, int nn, double *g_E)
 {
   /*--------------------------- kernel variables -----------------------*/
   
@@ -106,11 +108,11 @@ __global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, dou
     dist = fabs(reg_p.r-ic*ds)/ds;
 
     // calculate particle's forces
-    F = q*(sh_E[ic]*(1.0-dist) + sh_E[ic+1]*dist);
+    F = q*(sh_E[ic]*(1.0-dist) + sh_E[ic+1]*dist)+m*reg_p.vt*reg_p.vt/(reg_p.r+r_p);
 
     // move particles
-    reg_p.v += dt*F/m;
-    reg_p.r += dt*reg_p.v;
+    reg_p.vr += dt*F/m;
+    reg_p.r += dt*reg_p.vr;
     
     // store particle data in global memory
     g_p[tid] = reg_p;

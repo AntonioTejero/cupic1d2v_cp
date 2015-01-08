@@ -72,8 +72,9 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
   
   // host memory
   static const double L = init_L();       //
-  static const double ds = init_ds();     // geometric properties
-  static const int nn = init_nn();        // of simulation
+  static const double r_p = init_r_p();   // geometric properties
+  static const double ds = init_ds();     // of simulation
+  static const int nn = init_nn();        // 
   
   static const double dt = init_dt();     //
   double fpt = t+dt;                      // timing variables
@@ -153,7 +154,7 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
 
     // launch kernel to add particles
     cudaGetLastError();
-    pEmi<<<griddim, blockdim>>>(*d_p, *h_num_p, in, d_E, sqrt(kt/m), vd, q/m, nn, L, fpt, fvt, *tin, dtin, state);
+    pEmi<<<griddim, blockdim>>>(*d_p, *h_num_p, in, d_E, sqrt(kt/m), vd, q/m, nn, L, r_p, fpt, fvt, *tin, dtin, state);
     cu_sync_check(__FILE__, __LINE__);
 
     // actualize time for next particle insertion
@@ -172,7 +173,8 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 
 __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth, double vd, double qm, int nn, 
-                     double L, double fpt, double fvt, double tin, double dtin, curandStatePhilox4_32_10_t *state)
+                     double L, double r_p, double fpt, double fvt, double tin, double dtin, 
+                     curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- kernel variables -----------------------*/
   
@@ -200,14 +202,14 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
   for (int i = tid; i < n_in; i+=tpb) {
     // generate register particles
     reg_p.r = L;
-    if (vth > 0.0) {
-      rnd = curand_normal2_double(&local_state);
-      reg_p.v = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth-vd;
-    } else reg_p.v = -vd;
+    rnd = curand_normal2_double(&local_state);
+    reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth-vd;
+    rnd = curand_normal2_double(&local_state);
+    reg_p.vt = rnd.x*vth;
     
     // simple push
-    reg_p.r += (fpt-(tin+double(i)*dtin))*reg_p.v;
-    reg_p.v += (fvt-(tin+double(i)*dtin))*sh_E*qm;
+    reg_p.r += (fpt-(tin+double(i)*dtin))*reg_p.vr;
+    reg_p.vr += (fvt-(tin+double(i)*dtin))*(sh_E*qm+reg_p.vt*reg_p.vt/(L+r_p));
 
     // store new particles in global memory
     g_p[num_p+i] = reg_p;
