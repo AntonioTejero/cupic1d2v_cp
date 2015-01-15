@@ -19,25 +19,26 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   /*--------------------------- function variables -----------------------*/
 
   // host memory
-  static const double me = init_me();                 //
-  static const double mi = init_mi();                 //
-  static const double kte = init_kte();               // particle
-  static const double kti = init_kti();               // properties
-  static const double vd_e = init_vd_e();             //
-  static const double vd_i = init_vd_i();             //
+  static const double me = init_me();                       //
+  static const double mi = init_mi();                       //
+  static const double kte = init_kte();                     // particle
+  static const double kti = init_kti();                     // properties
+  static const double vd_e = init_vd_e();                   //
+  static const double vd_i = init_vd_i();                   //
   
-  static double tin_e = t+(*dtin_e);                  // time for next electron insertion
-  static double tin_i = t+(*dtin_i);                  // time for next ion insertion
-
-  static bool fp_is_on = floating_potential_is_on();  // probe is floating or not
-  static int nc = init_nc();                          // number of cells
-  static double ds = init_ds();                       // spatial step
-  static double epsilon0 = init_epsilon0();           // epsilon0 in simulation units
+  static const double r_p = init_r_p();                     // probe radius
+  static const bool fp_is_on = floating_potential_is_on();  // probe is floating or not
+  static const int nc = init_nc();                          // number of cells
+  static const double ds = init_ds();                       // spatial step
+  static const double epsilon0 = init_epsilon0();           // epsilon0 in simulation units
   
-  static const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  double dummy_phi_p;                                 // dummy probe potential
+  static double tin_e = t+(*dtin_e);                        // time for next electron insertion
+  static double tin_i = t+(*dtin_i);                        // time for next ion insertion
+  
+  static const double phi_s = -0.5*mi*vd_i*vd_i;            // potential at sheath edge
+  double dummy_phi_p;                                       // dummy probe potential
 
-  cudaError cuError;                                  // cuda error variable
+  cudaError cuError;                                        // cuda error variable
 
   // device memory
   
@@ -51,15 +52,14 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
 
   abs_emi_cc(t, &tin_i, *dtin_i, kti, vd_i, mi, +1.0, q_p, num_i, d_i, d_E, state);
 
-  //---- actualize probe potential because of the change in probe charge
+  //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
-    dummy_phi_p = 0.5*(*q_p)*nc/(ds*epsilon0);
+    dummy_phi_p = (*q_p)/(4*PI*epsilon0*r_p);
     if (dummy_phi_p > phi_s) dummy_phi_p = phi_s;
     cuError = cudaMemcpy (&d_phi[0], &dummy_phi_p, sizeof(double), cudaMemcpyHostToDevice);
     cu_check(cuError, __FILE__, __LINE__);
-    recalculate_dtin_i(dtin_e, dtin_i, dummy_phi_p);
   }
-  
+
   return;
 }
 

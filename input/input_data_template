@@ -27,7 +27,5 @@ max_v_e = 5.0;
 min_v_e = -5.0;
 max_v_i = 0.0;
 min_v_i = -0.3;
-#calibration configuration
-ion_current_calibration = 0;
 #floating potential configuration
 floating_potential = 0;

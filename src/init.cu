@@ -175,14 +175,14 @@ void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i
   /*--------------------------- function variables -----------------------*/
   
   // host memory
-  const double phi_p = init_phi_p();    // probe's potential
-  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  const int nn = init_nn();             // number of nodes 
-  const int nc = init_nc();             // number of cells 
+  const double phi_p = init_phi_p();                              // probe's potential
+  const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();    // sheath's edge potential
+  const int nn = init_nn();                                       // number of nodes 
+  const int nc = init_nc();                                       // number of cells 
   
-  double *h_phi;                        // host vector for potentials
+  double *h_phi;                                                  // host vector for potentials
   
-  cudaError_t cuError;                  // cuda error variable
+  cudaError_t cuError;                                            // cuda error variable
   
   // device memory
   
@@ -827,27 +827,6 @@ double init_v_min_i(void)
 
 /**********************************************************/
 
-bool calibration_is_on(void)
-{
-  // function variables
-  static int calibration_int = -1;
-  
-  // function body
-  
-  if (calibration_int < 0) {
-    read_input_file(&calibration_int, 31);
-    if (calibration_int != 0 && calibration_int != 1) {
-      cout << "Found error in input_data file. Wrong ion_current_calibration!\nStoping simulation.\n" << endl;
-      exit(1);
-    }
-  }
-  
-  if (calibration_int == 1) return true;
-  else return false;
-}
-
-/**********************************************************/
-
 bool floating_potential_is_on(void)
 {
   // function variables
@@ -856,7 +835,7 @@ bool floating_potential_is_on(void)
   // function body
   
   if (floating_potential_int < 0) {
-    read_input_file(&floating_potential_int , 33);
+    read_input_file(&floating_potential_int , 31);
     if (floating_potential_int != 0 && floating_potential_int != 1) {
       cout << "Found error in input_data file. Wrong floating_potential!\nStoping simulation.\n" << endl;
       exit(1);
@@ -889,7 +868,7 @@ double init_dtin_e(void)
   if (dtin_e == 0.0) {
     dtin_e = n*sqrt(kte/(2.0*PI*me))*exp(-0.5*me*vd_e*vd_e/kte);  // thermal component of input flux
     dtin_e += 0.5*n*(-vd_e)*(1.0+erf(sqrt(0.5*me/kte)*(-vd_e)));  // drift component of input flux
-    dtin_e *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
+    dtin_e *= exp(phi_s);                                         // correction on density at sheath edge
 
     dtin_e *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
     dtin_e = 1.0/dtin_e;              // time between consecutive particles injection
@@ -912,7 +891,6 @@ double init_dtin_i(void)
   const double kti = init_kti();
   const double vd_i = init_vd_i();
   const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  const double phi_p = init_phi_p();
   static double dtin_i = 0.0;
   
   // function body
@@ -920,7 +898,7 @@ double init_dtin_i(void)
   if (dtin_i == 0.0) {
     dtin_i = n*sqrt(kti/(2.0*PI*mi))*exp(-0.5*mi*vd_i*vd_i/kti);  // thermal component of input flux
     dtin_i += 0.5*n*(-vd_i)*(1.0+erf(sqrt(0.5*mi/kti)*(-vd_i)));  // drift component of input flux
-    dtin_i *= exp(phi_s)*0.5*(1.0+erf(sqrt(phi_s-phi_p)));        // correction on density at sheath edge
+    dtin_i *= exp(phi_s);                                         // correction on density at sheath edge
 
     dtin_i *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
     dtin_i = 1.0/dtin_i;              // time between consecutive particles injection

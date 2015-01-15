@@ -69,7 +69,6 @@ double init_v_max_e(void);
 double init_v_min_e(void);
 double init_v_max_i(void);
 double init_v_min_i(void);
-bool calibration_is_on(void);
 bool floating_potential_is_on(void);
 double init_dtin_e(void);
 double init_dtin_i(void);
