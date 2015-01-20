@@ -27,6 +27,7 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   static const double vd_i = init_vd_i();                   //
   
   static const double r_p = init_r_p();                     // probe radius
+  static const double theta = init_theta_p();               // angular amplitude of the simulation
   static const bool fp_is_on = floating_potential_is_on();  // probe is floating or not
   static const int nc = init_nc();                          // number of cells
   static const double ds = init_ds();                       // spatial step
@@ -54,7 +55,7 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
 
   //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
-    dummy_phi_p = (*q_p)/(4*PI*epsilon0*r_p);
+    dummy_phi_p = (*q_p)/(2.0*theta*epsilon0*r_p);
     if (dummy_phi_p > phi_s) dummy_phi_p = phi_s;
     cuError = cudaMemcpy (&d_phi[0], &dummy_phi_p, sizeof(double), cudaMemcpyHostToDevice);
     cu_check(cuError, __FILE__, __LINE__);
@@ -203,7 +204,7 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
     // generate register particles
     reg_p.r = L;
     rnd = curand_normal2_double(&local_state);
-    reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth-vd;
+    reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth+vd;
     rnd = curand_normal2_double(&local_state);
     reg_p.vt = rnd.x*vth;
     
