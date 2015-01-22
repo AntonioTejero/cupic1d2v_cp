@@ -83,6 +83,7 @@ double init_vth_i(void);
 __global__ void init_philox_state(curandStatePhilox4_32_10_t *state);
 __global__ void create_particles_kernel(particle *g_p, int num_p, double sigma, double vd, double L, 
                                         curandStatePhilox4_32_10_t *state);
-__global__ void fix_velocity(double q, double m, int num_p, particle *g_p, double dt, double ds, int nn, double *g_E);
+__global__ void fix_velocity(double q, double m, int num_p, particle *g_p, double dt, double ds, 
+                             double r_p, int nn, double *g_E);
 
 #endif

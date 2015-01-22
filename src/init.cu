@@ -306,6 +306,7 @@ void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double
   // host memory
   const double mi = init_mi();          // ion's mass
   const double me = init_me();          // electron's mass
+  const double r_p = init_r_p();        // probe radius
   const double ds = init_ds();          // spatial step size
   const double dt = init_dt();          // temporal step size
   const int nn = init_nn();             // number of nodes
@@ -326,12 +327,12 @@ void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double
 
   // fix velocities (electrons)
   cudaGetLastError();
-  fix_velocity<<<griddim, blockdim, sh_mem_size>>>(-1.0, me, num_e, d_e, dt, ds, nn, d_E);
+  fix_velocity<<<griddim, blockdim, sh_mem_size>>>(-1.0, me, num_e, d_e, dt, ds, r_p, nn, d_E);
   cu_sync_check(__FILE__, __LINE__);
   
   // fix velocities (ions)
   cudaGetLastError();
-  fix_velocity<<<griddim, blockdim, sh_mem_size>>>(1.0, mi, num_i, d_i, dt, ds, nn, d_E);
+  fix_velocity<<<griddim, blockdim, sh_mem_size>>>(1.0, mi, num_i, d_i, dt, ds, r_p, nn, d_E);
   cu_sync_check(__FILE__, __LINE__);
   
   return;
@@ -1067,7 +1068,8 @@ __global__ void create_particles_kernel(particle *g_p, int num_p, double sigma, 
 
 /**********************************************************/
 
-__global__ void fix_velocity(double q, double m, int num_p, particle *g_p, double dt, double ds, int nn, double *g_E)
+__global__ void fix_velocity(double q, double m, int num_p, particle *g_p, double dt, double ds, 
+                             double r_p, int nn, double *g_E)
 {
   /*--------------------------- kernel variables -----------------------*/
   
@@ -1100,7 +1102,7 @@ __global__ void fix_velocity(double q, double m, int num_p, particle *g_p, doubl
 
     // evaluate particle forces
     dist = fabs(reg_p.r-ic*ds)/ds;
-    F = q*(sh_E[ic]*(1-dist)+sh_E[ic+1]*dist);
+    F = q*(sh_E[ic]*(1-dist)+sh_E[ic+1]*dist)+m*reg_p.vt*reg_p.vt/(reg_p.r+r_p);
 
     // fix particle velocities
     reg_p.vr -= 0.5*dt*F/m;

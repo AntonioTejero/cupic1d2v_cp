@@ -84,6 +84,7 @@ __global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, dou
   int ic;                       // cell index
   double dist;                  // distance from particle to nearest down vertex (normalized to ds)
   double F;                     // force suffered for each register particle
+  double dummy_r;               // intermediate new position
 
   /*--------------------------- kernel body ----------------------------*/
   
@@ -112,7 +113,9 @@ __global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, dou
 
     // move particles
     reg_p.vr += dt*F/m;
-    reg_p.r += dt*reg_p.vr;
+    dummy_r = reg_p.r + dt*reg_p.vr;
+    reg_p.vt *= reg_p.r/dummy_r;
+    reg_p.r = dummy_r;
     
     // store particle data in global memory
     g_p[tid] = reg_p;

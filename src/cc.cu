@@ -188,6 +188,7 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
   int tpb = (int) blockDim.x;
   curandStatePhilox4_32_10_t local_state;
   double2 rnd;
+  double dummy_r;
  
   /*--------------------------- kernel body ----------------------------*/
   
@@ -209,7 +210,9 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
     reg_p.vt = rnd.x*vth;
     
     // simple push
-    reg_p.r += (fpt-(tin+double(i)*dtin))*reg_p.vr;
+    dummy_r = reg_p.r + (fpt-(tin+double(i)*dtin))*reg_p.vr;
+    reg_p.vt *= reg_p.r/dummy_r;
+    reg_p.r = dummy_r;
     reg_p.vr += (fvt-(tin+double(i)*dtin))*(sh_E*qm+reg_p.vt*reg_p.vt/(L+r_p));
 
     // store new particles in global memory
