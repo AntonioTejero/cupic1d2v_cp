@@ -281,7 +281,7 @@ void save_ddf(double *d_avg_ddf, string filename)
   pFile = fopen(filename.c_str(), "w");
   for (int i = 0; i < n_bin_ddf; i++) {
     double bin_pos = (double(i)+0.5)*bin_size+r_p;
-    fprintf(pFile, " %lf %lf \n", bin_pos, h_avg_ddf[i]/(l_p*bin_size*theta_p*r_c));
+    fprintf(pFile, " %lf %lf \n", bin_pos, h_avg_ddf[i]/(l_p*bin_size*theta_p*bin_pos));
   }
   fclose(pFile);
 
