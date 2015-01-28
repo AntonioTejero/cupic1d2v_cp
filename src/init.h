@@ -70,6 +70,7 @@ double init_v_min_e(void);
 double init_v_max_i(void);
 double init_v_min_i(void);
 bool floating_potential_is_on(void);
+bool flux_calibration_is_on(void);
 double init_dtin_e(void);
 double init_dtin_i(void);
 int init_nn(void); 

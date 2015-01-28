@@ -41,6 +41,7 @@ int main (int argc, const char* argv[])
   double dtin_e = init_dtin_e();        // time between electron insertions
   double dtin_i = init_dtin_i();        // time between ion insertions
   double q_p = 0;                       // probe's acumulated charge
+  double vd_i = init_vd_i();            // ion's drift velocity
   char filename[50];                    // filename for saved data
 
   ifstream ifile;
@@ -93,7 +94,7 @@ int main (int argc, const char* argv[])
     poisson_solver(1.0e-4, d_rho, d_phi);
     field_solver(d_phi, d_E);
     particle_mover(d_e, num_e, d_i, num_i, d_E);
-    cc(t, &num_e, &d_e, &dtin_e, &num_i, &d_i, &dtin_i, &q_p, d_phi, d_E, state);
+    cc(t, &num_e, &d_e, &dtin_e, &num_i, &d_i, &dtin_i, &vd_i, &q_p, d_phi, d_E, state);
 
     // average mesh variables and distribution functions
     avg_mesh(d_rho, d_avg_rho, &count_rho);

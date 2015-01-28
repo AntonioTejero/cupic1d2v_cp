@@ -848,6 +848,26 @@ bool floating_potential_is_on(void)
 
 /**********************************************************/
 
+bool flux_calibration_is_on(void)
+{
+  // function variables
+  static int flux_calibration_is_on = -1;
+  
+  // function body
+  
+  if (flux_calibration_is_on < 0) {
+    read_input_file(&flux_calibration_is_on , 33);
+    if (flux_calibration_is_on != 0 && flux_calibration_is_on != 1) {
+      cout << "Found error in input_data file. Wrong flux_calibration_is_on !\nStoping simulation.\n" << endl;
+      exit(1);
+    }
+  }
+  
+  if (flux_calibration_is_on == 1) return true;
+  else return false;
+}
+
+/**********************************************************/
 double init_dtin_e(void)
 {
   // function variables
@@ -860,7 +880,6 @@ double init_dtin_e(void)
   const double kte = init_kte();
   const double vd_e = init_vd_e();
   const double phi_s = -0.5*init_mi()*init_vd_i()*init_vd_i();
-  const double phi_p = init_phi_p();
   static double dtin_e = 0.0;
   
   // function body

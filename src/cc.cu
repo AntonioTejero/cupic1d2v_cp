@@ -14,7 +14,7 @@
 /********************* HOST FUNCTION DEFINITIONS *********************/
 
 void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, particle **d_i, double *dtin_i, 
-         double *q_p, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
+         double *vd_i, double *q_p, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- function variables -----------------------*/
 
@@ -24,11 +24,11 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   static const double kte = init_kte();                     // particle
   static const double kti = init_kti();                     // properties
   static const double vd_e = init_vd_e();                   //
-  static const double vd_i = init_vd_i();                   //
   
   static const double r_p = init_r_p();                     // probe radius
   static const double theta = init_theta_p();               // angular amplitude of the simulation
   static const bool fp_is_on = floating_potential_is_on();  // probe is floating or not
+  static const bool flux_cal_on = flux_calibration_is_on(); // ion flux calibration is activated or not
   static const int nc = init_nc();                          // number of cells
   static const double ds = init_ds();                       // spatial step
   static const double epsilon0 = init_epsilon0();           // epsilon0 in simulation units
@@ -36,7 +36,7 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   static double tin_e = t+(*dtin_e);                        // time for next electron insertion
   static double tin_i = t+(*dtin_i);                        // time for next ion insertion
   
-  static const double phi_s = -0.5*mi*vd_i*vd_i;            // potential at sheath edge
+  static const double phi_s = -0.5*mi*(*vd_i)*(*vd_i);      // potential at sheath edge
   double dummy_phi_p;                                       // dummy probe potential
 
   cudaError cuError;                                        // cuda error variable
@@ -47,11 +47,11 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   
   //---- electrons contour conditions
   
-  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_p,  num_e, d_e, d_E, state);
+  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_p, num_e, d_e, d_E, state);
 
   //---- ions contour conditions
 
-  abs_emi_cc(t, &tin_i, *dtin_i, kti, vd_i, mi, +1.0, q_p, num_i, d_i, d_E, state);
+  abs_emi_cc(t, &tin_i, *dtin_i, kti, *vd_i, mi, +1.0, q_p, num_i, d_i, d_E, state);
 
   //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
@@ -59,6 +59,10 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
     if (dummy_phi_p > phi_s) dummy_phi_p = phi_s;
     cuError = cudaMemcpy (&d_phi[0], &dummy_phi_p, sizeof(double), cudaMemcpyHostToDevice);
     cu_check(cuError, __FILE__, __LINE__);
+  }
+  //---- actulize ion drift velocity if calibration is on
+  if (flux_cal_on) {
+    calibrate_ion_flux(vd_i, dtin_i, dtin_e, d_E, d_phi);
   }
 
   return;
@@ -170,6 +174,81 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
 
 /**********************************************************/
 
+void calibrate_ion_flux(double *vd_i, double *dtin_i, double *dtin_e, double *d_E, double *d_phi)
+{
+  /*--------------------------- function variables -----------------------*/
+  
+  // host memory
+  static const double n = init_n();
+  static const double l_p = init_l_p();
+  static const double r_p = init_r_p();
+  static const double theta = init_theta_p();
+  static const double L = init_L();
+  static const double mi = init_mi();
+  static const double kti = init_kti();
+  static const double me = init_me();
+  static const double kte = init_kte();
+  static const double vd_e = init_vd_e();
+  static const int nn = init_nn();
+
+  double phi_s;
+  double E_mean;
+  double *h_E;
+  const double increment = 1.0e-6;
+ 
+  cudaError cuError;                            // cuda error variable
+
+  // device memory
+  
+  /*----------------------------- function body -------------------------*/
+ 
+ //---- Actualize ion drift velocity acording to the value of electric field at plasma frontier
+
+ // allocate host memory for field
+ h_E = (double*) malloc(nn*sizeof(double));
+  
+ // copy field from device to host memory
+ cuError = cudaMemcpy (h_E, d_E, nn*sizeof(double), cudaMemcpyDeviceToHost);
+ cu_check(cuError, __FILE__, __LINE__);
+
+ // check mean value of electric field at plasma frontier
+ E_mean = 0.0;
+ for (int i=nn; i>nn-5; i--) {
+   E_mean += h_E[i];
+ }
+ E_mean /= 5.0;
+ 
+ // free host memory for field
+ free(h_E);
+
+ // actualize ion drift velocity
+ if (E_mean<0) {
+   *vd_i -= increment;
+ } else if (E_mean>0) {
+   *vd_i += increment;
+ }
+
+ // actualize sheath edge potential
+ phi_s = -0.5*mi*(*vd_i)*(*vd_i);
+ cuError = cudaMemcpy (&d_phi[nn-1], &phi_s, sizeof(double), cudaMemcpyHostToDevice);
+ cu_check(cuError, __FILE__, __LINE__);
+
+ //---- Actualize time between ion/electron insertions
+
+ *dtin_e = n*sqrt(kte/(2.0*PI*me))*exp(-0.5*me*vd_e*vd_e/kte);        // thermal component of input flux
+ *dtin_e += 0.5*n*(-vd_e)*(1.0+erf(sqrt(0.5*me/kte)*(-vd_e)));        // drift component of input flux
+ *dtin_e *= exp(phi_s);                                               // correction on density at sheath edge
+ *dtin_e *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
+ *dtin_e = 1.0/(*dtin_e);           // time between consecutive particles injection
+
+ *dtin_i = n*sqrt(kti/(2.0*PI*mi))*exp(-0.5*mi*(*vd_i)*(*vd_i)/kti);  // thermal component of input flux
+ *dtin_i += 0.5*n*(-(*vd_i))*(1.0+erf(sqrt(0.5*mi/kti)*(-(*vd_i))));  // drift component of input flux
+ *dtin_i *= exp(phi_s);                                               // correction on density at sheath edge
+ *dtin_i *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
+ *dtin_i = 1.0/(*dtin_i);           // time between consecutive particles injection
+
+ return;
+}
 
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 

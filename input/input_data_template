@@ -29,3 +29,5 @@ max_v_i = 0.0;
 min_v_i = -0.3;
 #floating potential configuration
 floating_potential = 0;
+#calibration configuration
+calibrate_ion_flux = 0;
