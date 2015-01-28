@@ -98,7 +98,7 @@ void eval_df(double *d_avg_ddf, double *d_avg_vdf, double vmax, double vmin, par
   griddim = int(num_p/PARTICLE2DF_BLOCK_DIM) + 1;
   sh_mem_size = sizeof(int)*(n_bin_ddf+(n_bin_vdf+1)*n_vdf);
 
-  // call to mesh_sum kernel
+  // call to particle2df kernel
   cudaGetLastError();
   particle2df<<<griddim, blockdim, sh_mem_size>>>(d_avg_ddf, n_bin_ddf, L, d_avg_vdf, n_vdf,
                                                   n_bin_vdf, vmax, vmin, d_p, num_p);
@@ -252,6 +252,9 @@ void save_ddf(double *d_avg_ddf, string filename)
   /*--------------------------- function variables -----------------------*/
   
   // host memory
+  static const double l_p = init_l_p();                 // probe lenght
+  static const double theta_p = init_theta_p();         // probe angular amplitude 
+  static const double r_p = init_r_p();                 // probe radius
   static const double L = init_L();                     // size of simulation
   static const int n_bin_ddf = init_n_bin_ddf();        // number of bins of ddf
   static const double bin_size = L/double(n_bin_ddf);   // size of each bin
@@ -277,7 +280,8 @@ void save_ddf(double *d_avg_ddf, string filename)
   filename.append(".dat");
   pFile = fopen(filename.c_str(), "w");
   for (int i = 0; i < n_bin_ddf; i++) {
-    fprintf(pFile, " %lf %lf \n", (double(i)+0.5)*bin_size, h_avg_ddf[i]);
+    double bin_pos = (double(i)+0.5)*bin_size+r_p;
+    fprintf(pFile, " %lf %lf \n", bin_pos, h_avg_ddf[i]/(l_p*bin_size*theta_p*r_c));
   }
   fclose(pFile);
 
@@ -294,6 +298,7 @@ void save_vdf(double *d_avg_vdf, double vmax, double vmin, string filename)
   /*--------------------------- function variables -----------------------*/
   
   // host memory
+  static const double r_p = init_r_p();                 // probe radius
   static const double L = init_L();                     // size of simulation
   static const int n_vdf = init_n_vdf();                // number of vdfs
   static const int n_bin_vdf = init_n_bin_vdf();        // number of bins of vdf
@@ -321,8 +326,10 @@ void save_vdf(double *d_avg_vdf, double vmax, double vmin, string filename)
   filename.append(".dat");
   pFile = fopen(filename.c_str(), "w");
   for (int i = 0; i < n_vdf; i++) {
+    double bin_pos = (double(i)+0.5)*r_bin_size+r_p;
     for (int j = 0; j < n_bin_vdf; j++) {
-      fprintf(pFile, " %g %g %g \n", (double(i)+0.5)*r_bin_size, (double(j)+0.5)*v_bin_size+vmin, h_avg_vdf[j+n_bin_vdf*i]);
+      double bin_vel = (double(j)+0.5)*v_bin_size+vmin;
+      fprintf(pFile, " %g %g %g \n", bin_pos, bin_vel, h_avg_vdf[j+n_bin_vdf*i]);
     }
     fprintf(pFile, "\n");
   }
@@ -491,7 +498,7 @@ __global__ void particle2df(double *g_avg_ddf, int n_bin_ddf, double L, double *
 
   // normalize density distribution function and add it to global averaged one
   for (int i = tidx; i < n_bin_ddf; i += bdim) {
-    atomicAdd(&g_avg_ddf[i], double(sh_ddf[i])/double(num_p));
+    atomicAdd(&g_avg_ddf[i], double(sh_ddf[i]));
   }
   __syncthreads();
 
