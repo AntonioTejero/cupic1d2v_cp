@@ -263,7 +263,7 @@ __global__ void jacobi_iteration (int nn, double ds, double r_p, double epsilon0
   __syncthreads();
   
   // actualize interior mesh points
-  if (g_tid < nn - 1) new_phi = 0.5*(dummy_rho + sh_old_phi[sh_tid-1]*(1.0+ds/(2.0*(g_tid*ds+r_p))) + sh_old_phi[sh_tid+1]*(1.0-ds/(2.0*(g_tid*ds+r_p))));
+  if (g_tid < nn - 1) new_phi = 0.5*(dummy_rho + sh_old_phi[sh_tid+1]*(1.0+ds/(2.0*(g_tid*ds+r_p))) + sh_old_phi[sh_tid-1]*(1.0-ds/(2.0*(g_tid*ds+r_p))));
   __syncthreads();
   
   // store new values of phi in global memory
