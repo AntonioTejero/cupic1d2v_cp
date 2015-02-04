@@ -343,7 +343,7 @@ void save_vdf(double *d_avg_vdf, double vmax, double vmin, string filename)
 
 /**********************************************************/
 
-void save_log(double t, int num_e, int num_i, double U_e, double U_i, double dtin_i, double *d_phi)
+void save_log(double t, int num_e, int num_i, double U_e, double U_i, double vd_i, double *d_phi)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -367,7 +367,7 @@ void save_log(double t, int num_e, int num_i, double U_e, double U_i, double dti
   if (pFile == NULL) {
     printf ("Error opening log file \n");
     exit(1);
-  } else fprintf(pFile, " %.17e %d %d %.17e %.17e %.17e %.17e \n", t, num_e, num_i, U_e, U_i, dtin_i, dummy_phi_p);
+  } else fprintf(pFile, " %.17e %d %d %.17e %.17e %.17e %.17e \n", t, num_e, num_i, U_e, U_i, vd_i, dummy_phi_p);
   fclose(pFile);
 
   return;

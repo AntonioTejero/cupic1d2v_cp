@@ -132,7 +132,7 @@ int main (int argc, const char* argv[])
       // save log
       U_e = eval_particle_energy(d_phi,  d_e, 1.0, -1.0, num_e);
       U_i = eval_particle_energy(d_phi,  d_i, mi, 1.0, num_i);
-      save_log(t, num_e, num_i, U_e, U_i, dtin_i, d_phi);
+      save_log(t, num_e, num_i, U_e, U_i, vd_i, d_phi);
 
       cout << "iteration = " << i << endl;
     }
