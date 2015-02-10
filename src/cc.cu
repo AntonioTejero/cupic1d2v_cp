@@ -223,9 +223,9 @@ void calibrate_ion_flux(double *vd_i, double *dtin_i, double *dtin_e, double *d_
 
  // actualize ion drift velocity
  if (E_mean<0) {
-   *vd_i -= increment;
+   if (*vd_i > -1.0/sqrt(mi)) *vd_i -= increment;
  } else if (E_mean>0) {
-   *vd_i += increment;
+   if (*vd_i < 0.0) *vd_i += increment;
  }
 
  // actualize sheath edge potential
