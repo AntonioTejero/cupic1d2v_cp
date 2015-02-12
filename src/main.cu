@@ -40,7 +40,8 @@ int main (int argc, const char* argv[])
   double mi = init_mi();                // ion mass
   double dtin_e = init_dtin_e();        // time between electron insertions
   double dtin_i = init_dtin_i();        // time between ion insertions
-  double q_p = 0;                       // probe's acumulated charge
+  double q_pe = 0;                      // probe's negative acumulated charge (electrons)
+  double q_pi = 0;                      // probe's positive acumulated charge (ions)
   double vd_i = init_vd_i();            // ion's drift velocity
   char filename[50];                    // filename for saved data
 
@@ -94,7 +95,7 @@ int main (int argc, const char* argv[])
     poisson_solver(1.0e-4, d_rho, d_phi);
     field_solver(d_phi, d_E);
     particle_mover(d_e, num_e, d_i, num_i, d_E);
-    cc(t, &num_e, &d_e, &dtin_e, &num_i, &d_i, &dtin_i, &vd_i, &q_p, d_phi, d_E, state);
+    cc(t, &num_e, &d_e, &dtin_e, &num_i, &d_i, &dtin_i, &vd_i, &q_pe, &q_pi, d_phi, d_E, state);
 
     // average mesh variables and distribution functions
     avg_mesh(d_rho, d_avg_rho, &count_rho);
@@ -132,7 +133,7 @@ int main (int argc, const char* argv[])
       // save log
       U_e = eval_particle_energy(d_phi,  d_e, 1.0, -1.0, num_e);
       U_i = eval_particle_energy(d_phi,  d_i, mi, 1.0, num_i);
-      save_log(t, num_e, num_i, U_e, U_i, vd_i, d_phi);
+      save_log(t, num_e, num_i, U_e, U_i, &q_pe, &q_pi, vd_i, d_phi);
 
       cout << "iteration = " << i << endl;
     }

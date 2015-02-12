@@ -14,7 +14,7 @@
 /********************* HOST FUNCTION DEFINITIONS *********************/
 
 void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, particle **d_i, double *dtin_i, 
-         double *vd_i, double *q_p, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
+         double *vd_i, double *q_pe, double *q_pi, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- function variables -----------------------*/
 
@@ -36,7 +36,8 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   static double tin_e = t+(*dtin_e);                        // time for next electron insertion
   static double tin_i = t+(*dtin_i);                        // time for next ion insertion
   
-  static const double phi_s = -0.5*mi*(*vd_i)*(*vd_i);      // potential at sheath edge
+  static double q_p = 0.0;                                  // net charge acumulated by the probe (not reseted)
+  double phi_s = -0.5*mi*(*vd_i)*(*vd_i);                   // potential at sheath edge
   double dummy_phi_p;                                       // dummy probe potential
 
   cudaError cuError;                                        // cuda error variable
@@ -47,19 +48,22 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   
   //---- electrons contour conditions
   
-  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_p, num_e, d_e, d_E, state);
+  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_pe, num_e, d_e, d_E, state);
 
   //---- ions contour conditions
 
-  abs_emi_cc(t, &tin_i, *dtin_i, kti, *vd_i, mi, +1.0, q_p, num_i, d_i, d_E, state);
+  abs_emi_cc(t, &tin_i, *dtin_i, kti, *vd_i, mi, +1.0, q_pi, num_i, d_i, d_E, state);
 
   //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
-    dummy_phi_p = (*q_p)/(2.0*theta*epsilon0*r_p);
+    q_p += *q_pe;
+    q_p += *q_pi;
+    dummy_phi_p = q_p/(2.0*theta*epsilon0*r_p);
     if (dummy_phi_p > phi_s) dummy_phi_p = phi_s;
     cuError = cudaMemcpy (&d_phi[0], &dummy_phi_p, sizeof(double), cudaMemcpyHostToDevice);
     cu_check(cuError, __FILE__, __LINE__);
   }
+  
   //---- actulize ion drift velocity if calibration is on
   if (flux_cal_on) {
     calibrate_ion_flux(vd_i, dtin_i, dtin_e, d_E, d_phi);
