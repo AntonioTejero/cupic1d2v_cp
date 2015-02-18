@@ -114,7 +114,7 @@ __global__ void leap_frog_step(double q, double m, int num_p, particle *g_p, dou
     // move particles
     reg_p.vr += dt*F/m;
     dummy_r = reg_p.r + dt*reg_p.vr;
-    reg_p.vt *= reg_p.r/dummy_r;
+    reg_p.vt *= (reg_p.r+r_p)/(dummy_r+r_p);
     reg_p.r = dummy_r;
     
     // store particle data in global memory
