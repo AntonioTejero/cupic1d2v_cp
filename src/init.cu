@@ -56,8 +56,7 @@ void init_dev(void)
 }
 
 void init_sim(double **d_rho, double **d_phi, double **d_E, double **d_avg_rho, double **d_avg_phi, double **d_avg_E, 
-              particle **d_e, int *num_e, particle **d_i, int *num_i, double **d_avg_ddf_e, double **d_avg_vdf_e, 
-              double **d_avg_ddf_i, double **d_avg_vdf_i, double *t, curandStatePhilox4_32_10_t **state)
+              particle **d_i, int *num_i, double **d_avg_ddf_i, double **d_avg_vdf_i, double *t, curandStatePhilox4_32_10_t **state)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -76,32 +75,32 @@ void init_sim(double **d_rho, double **d_phi, double **d_E, double **d_avg_rho, 
     *t = 0.;
 
     // create particles
-    create_particles(d_i, num_i, d_e, num_e, state);
+    create_particles(d_i, num_i, state);
 
     // initialize mesh variables and their averaged counterparts
-    initialize_mesh(d_rho, d_phi, d_E, *d_i, *num_i, *d_e, *num_e);
+    initialize_mesh(d_rho, d_phi, d_E, *d_i, *num_i);
 
     // adjust velocities for leap-frog scheme
-    adjust_leap_frog(*d_i, *num_i, *d_e, *num_e, *d_E);
+    adjust_leap_frog(*d_i, *num_i, *d_E);
 
     //initialize diagnostic variables
     initialize_avg_mesh(d_avg_rho, d_avg_phi, d_avg_E);
-    initialize_avg_df(d_avg_ddf_e, d_avg_vdf_e, d_avg_ddf_i, d_avg_vdf_i);
+    initialize_avg_df(d_avg_ddf_i, d_avg_vdf_i);
     
-    cout << "Simulation initialized with " << *num_e*2 << " particles." << endl << endl;
+    cout << "Simulation initialized with " << *num_i << " particles." << endl << endl;
   } else if (n_ini > 0) {
     // adjust initial time
     *t = n_ini*dt;
 
     // read particle from file
-    load_particles(d_i, num_i, d_e, num_e, state);
+    load_particles(d_i, num_i, state);
     
     // initialize mesh variables
-    initialize_mesh(d_rho, d_phi, d_E, *d_i, *num_i, *d_e, *num_e);
+    initialize_mesh(d_rho, d_phi, d_E, *d_i, *num_i);
     
     //initialize diagnostic variables
     initialize_avg_mesh(d_avg_rho, d_avg_phi, d_avg_E);
-    initialize_avg_df(d_avg_ddf_e, d_avg_vdf_e, d_avg_ddf_i, d_avg_vdf_i);
+    initialize_avg_df(d_avg_ddf_i, d_avg_vdf_i);
 
     cout << "Simulation state loaded from time t = " << *t << endl;
   } else {
@@ -115,7 +114,7 @@ void init_sim(double **d_rho, double **d_phi, double **d_E, double **d_avg_rho, 
 
 /**********************************************************/
 
-void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, curandStatePhilox4_32_10_t **state)
+void create_particles(particle **d_i, int *num_i, curandStatePhilox4_32_10_t **state)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -145,19 +144,11 @@ void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, cu
 
   // calculate initial number of particles
   *num_i = 0;
-  *num_e = *num_i;
   
   // allocate device memory for particle vectors
   cuError = cudaMalloc ((void **) d_i, (*num_i)*sizeof(particle));
   cu_check(cuError, __FILE__, __LINE__);
-  cuError = cudaMalloc ((void **) d_e, (*num_e)*sizeof(particle));
-  cu_check(cuError, __FILE__, __LINE__);
   
-  // create particles (electrons)
-  cudaGetLastError();
-  create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_e, *num_e, sqrt(kte/me), vd_e, L, *state);
-  cu_sync_check(__FILE__, __LINE__);
-
   // create particles (ions)
   cudaGetLastError();
   create_particles_kernel<<<1, CURAND_BLOCK_DIM>>>(*d_i, *num_i, sqrt(kti/mi), vd_i, L, *state);
@@ -168,8 +159,7 @@ void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, cu
 
 /**********************************************************/
 
-void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i, int num_i, 
-                     particle *d_e, int num_e)
+void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i, int num_i)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -212,7 +202,7 @@ void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i
   free(h_phi);
   
   // deposit charge into the mesh nodes
-  charge_deposition(*d_rho, d_e, num_e, d_i, num_i);
+  charge_deposition(*d_rho, *d_phi, d_i, num_i);
   
   // solve poisson equation
   poisson_solver(1.0e-4, *d_rho, *d_phi);
@@ -259,7 +249,7 @@ void initialize_avg_mesh(double **d_avg_rho, double **d_avg_phi, double **d_avg_
 
 /**********************************************************/
 
-void initialize_avg_df(double **d_avg_ddf_e, double **d_avg_vdf_e, double **d_avg_ddf_i, double **d_avg_vdf_i)
+void initialize_avg_df(double **d_avg_ddf_i, double **d_avg_vdf_i)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -275,21 +265,13 @@ void initialize_avg_df(double **d_avg_ddf_e, double **d_avg_vdf_e, double **d_av
   /*----------------------------- function body -------------------------*/
   
   // allocate device memory for averaged distribution functions
-  cuError = cudaMalloc ((void **) d_avg_ddf_e, n_bin_ddf*sizeof(double));
-  cu_check(cuError, __FILE__, __LINE__);
   cuError = cudaMalloc ((void **) d_avg_ddf_i, n_bin_ddf*sizeof(double));
-  cu_check(cuError, __FILE__, __LINE__);
-  cuError = cudaMalloc ((void **) d_avg_vdf_e, n_bin_vdf*n_vdf*sizeof(double));
   cu_check(cuError, __FILE__, __LINE__);
   cuError = cudaMalloc ((void **) d_avg_vdf_i, n_bin_vdf*n_vdf*sizeof(double));
   cu_check(cuError, __FILE__, __LINE__);
   
   // initialize to zero averaged distribution functions
-  cuError = cudaMemset ((void *) *d_avg_ddf_e, 0, n_bin_ddf*sizeof(double));
-  cu_check(cuError, __FILE__, __LINE__);
   cuError = cudaMemset ((void *) *d_avg_ddf_i, 0, n_bin_ddf*sizeof(double));
-  cu_check(cuError, __FILE__, __LINE__);
-  cuError = cudaMemset ((void *) *d_avg_vdf_e, 0, n_bin_vdf*n_vdf*sizeof(double));
   cu_check(cuError, __FILE__, __LINE__);
   cuError = cudaMemset ((void *) *d_avg_vdf_i, 0, n_bin_vdf*n_vdf*sizeof(double));
   cu_check(cuError, __FILE__, __LINE__);
@@ -299,7 +281,7 @@ void initialize_avg_df(double **d_avg_ddf_e, double **d_avg_vdf_e, double **d_av
 
 /**********************************************************/
 
-void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double *d_E)
+void adjust_leap_frog(particle *d_i, int num_i, double *d_E)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -325,11 +307,6 @@ void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double
   // set shared memory size for fix_velocity kernel
   sh_mem_size = nn*sizeof(double);
 
-  // fix velocities (electrons)
-  cudaGetLastError();
-  fix_velocity<<<griddim, blockdim, sh_mem_size>>>(-1.0, me, num_e, d_e, dt, ds, r_p, nn, d_E);
-  cu_sync_check(__FILE__, __LINE__);
-  
   // fix velocities (ions)
   cudaGetLastError();
   fix_velocity<<<griddim, blockdim, sh_mem_size>>>(1.0, mi, num_i, d_i, dt, ds, r_p, nn, d_E);
@@ -340,7 +317,7 @@ void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double
 
 /**********************************************************/
 
-void load_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, curandStatePhilox4_32_10_t **state)
+void load_particles(particle **d_i, int *num_i, curandStatePhilox4_32_10_t **state)
 {
   /*--------------------------- function variables -----------------------*/
 
@@ -363,8 +340,6 @@ void load_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, cura
   // load particles
   sprintf(filename, "./ions.dat");
   read_particle_file(filename, d_i, num_i);
-  sprintf(filename, "./electrons.dat");
-  read_particle_file(filename, d_e, num_e);
   
   return;
 }

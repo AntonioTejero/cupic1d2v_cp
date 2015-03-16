@@ -343,8 +343,7 @@ void save_vdf(double *d_avg_vdf, double vmax, double vmin, string filename)
 
 /**********************************************************/
 
-void save_log(double t, int num_e, int num_i, double U_e, double U_i, 
-              double *q_pe, double *q_pi, double vd_i, double *d_phi)
+void save_log(double t, int num_i, double U_i, double *q_pi, double vd_i, double *d_phi)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -369,13 +368,11 @@ void save_log(double t, int num_e, int num_i, double U_e, double U_i,
     printf ("Error opening log file \n");
     exit(1);
   } else {
-    fprintf(pFile, " %.17e %d %d %.17e %.17e %.17e %.17e %.17e %.17e \n", 
-    t, num_e, num_i, U_e, U_i, *q_pe, *q_pi, vd_i, dummy_phi_p);
+    fprintf(pFile, " %.17e %d %.17e %.17e %.17e %.17e \n", t, num_i, U_i, *q_pi, vd_i, dummy_phi_p);
   }
   fclose(pFile);
 
   // reset negative and positive current acumulated 
-  *q_pe = 0.0;
   *q_pi = 0.0;
 
   return;

@@ -13,8 +13,8 @@
 
 /********************* HOST FUNCTION DEFINITIONS *********************/
 
-void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, particle **d_i, double *dtin_i, 
-         double *vd_i, double *q_pe, double *q_pi, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
+void cc (double t, int *num_i, particle **d_i, double *dtin_i, double *vd_i, double *q_pi, 
+         double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- function variables -----------------------*/
 
@@ -33,7 +33,6 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   static const double ds = init_ds();                       // spatial step
   static const double epsilon0 = init_epsilon0();           // epsilon0 in simulation units
   
-  static double tin_e = t+(*dtin_e);                        // time for next electron insertion
   static double tin_i = t+(*dtin_i);                        // time for next ion insertion
   
   static double q_p = 0.0;                                  // net charge acumulated by the probe (not reseted)
@@ -46,17 +45,12 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   
   /*----------------------------- function body -------------------------*/
   
-  //---- electrons contour conditions
-  
-  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_pe, num_e, d_e, d_E, state);
-
   //---- ions contour conditions
 
   abs_emi_cc(t, &tin_i, *dtin_i, kti, *vd_i, mi, +1.0, q_pi, num_i, d_i, d_E, state);
 
   //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
-    q_p += *q_pe;
     q_p += *q_pi;
     dummy_phi_p = q_p/(2.0*theta*epsilon0*r_p);
     if (dummy_phi_p > phi_s) dummy_phi_p = phi_s;
@@ -66,7 +60,7 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   
   //---- actulize ion drift velocity if calibration is on
   if (flux_cal_on) {
-    calibrate_ion_flux(vd_i, dtin_i, dtin_e, d_E, d_phi);
+    calibrate_ion_flux(vd_i, dtin_i, d_E, d_phi);
   }
 
   return;
@@ -178,7 +172,7 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
 
 /**********************************************************/
 
-void calibrate_ion_flux(double *vd_i, double *dtin_i, double *dtin_e, double *d_E, double *d_phi)
+void calibrate_ion_flux(double *vd_i, double *dtin_i, double *d_E, double *d_phi)
 {
   /*--------------------------- function variables -----------------------*/
   
@@ -238,13 +232,6 @@ void calibrate_ion_flux(double *vd_i, double *dtin_i, double *dtin_e, double *d_
  cu_check(cuError, __FILE__, __LINE__);
 
  //---- Actualize time between ion/electron insertions
-
- *dtin_e = n*sqrt(kte/(2.0*PI*me))*exp(-0.5*me*vd_e*vd_e/kte);        // thermal component of input flux
- *dtin_e += 0.5*n*(-vd_e)*(1.0+erf(sqrt(0.5*me/kte)*(-vd_e)));        // drift component of input flux
- *dtin_e *= exp(phi_s);                                               // correction on density at sheath edge
- *dtin_e *= (r_p+L)*theta*l_p;      // number of particles that enter the simulation per unit of time
- *dtin_e = 1.0/(*dtin_e);           // time between consecutive particles injection
-
  *dtin_i = n*sqrt(kti/(2.0*PI*mi))*exp(-0.5*mi*(*vd_i)*(*vd_i)/kti);  // thermal component of input flux
  *dtin_i += 0.5*n*(-(*vd_i))*(1.0+erf(sqrt(0.5*mi/kti)*(-(*vd_i))));  // drift component of input flux
  *dtin_i *= exp(phi_s);                                               // correction on density at sheath edge

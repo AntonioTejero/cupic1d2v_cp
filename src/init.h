@@ -31,15 +31,13 @@
 // host functions
 void init_dev(void);
 void init_sim(double **d_rho, double **d_phi, double **d_E, double **d_avg_rho, double **d_avg_phi, double **d_avg_E, 
-              particle **d_e, int *num_e, particle **d_i, int *num_i, double **d_avg_ddf_e, double **d_avg_vdf_e, 
-              double **d_avg_ddf_i, double **d_avg_vdf_i, double *t, curandStatePhilox4_32_10_t **state);
-void create_particles(particle **d_i, int *num_i, particle **d_e, int *num_e,
-                      curandStatePhilox4_32_10_t **state);
-void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i, int num_i, particle *d_e, int num_e);
+              particle **d_i, int *num_i, double **d_avg_ddf_i, double **d_avg_vdf_i, double *t, curandStatePhilox4_32_10_t **state);
+void create_particles(particle **d_i, int *num_i, curandStatePhilox4_32_10_t **state);
+void initialize_mesh(double **d_rho, double **d_phi, double **d_E, particle *d_i, int num_i);
 void initialize_avg_mesh(double **d_avg_rho, double **d_avg_phi, double **d_avg_E);
-void initialize_avg_df(double **d_avg_ddf_e, double **d_avg_vdf_e, double **d_avg_ddf_i, double **d_avg_vdf_i);
-void adjust_leap_frog(particle *d_i, int num_i, particle *d_e, int num_e, double *d_E);
-void load_particles(particle **d_i, int *num_i, particle **d_e, int *num_e, curandStatePhilox4_32_10_t **state);
+void initialize_avg_df(double **d_avg_ddf_i, double **d_avg_vdf_i);
+void adjust_leap_frog(particle *d_i, int num_i, double *d_E);
+void load_particles(particle **d_i, int *num_i, curandStatePhilox4_32_10_t **state);
 void read_particle_file(string filename, particle **d_p, int *num_p);
 template <typename type> void read_input_file(type *data, int n);
 int init_n_ini(void);

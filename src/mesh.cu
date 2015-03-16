@@ -13,11 +13,12 @@
 
 /********************* HOST FUNCTION DEFINITIONS *********************/
 
-void charge_deposition(double *d_rho, particle *d_e, int num_e, particle *d_i, int num_i) 
+void charge_deposition(double *d_rho, double *d_phi, particle *d_i, int num_i) 
 {
   /*--------------------------- function variables -----------------------*/
   
   // host memory
+  static const double n = init_n();               // number density of particles at plasma
   static const double ds = init_ds();             // spatial step
   static const double l_p = init_l_p();           // lengh of cilindrical probe
   static const double r_p = init_r_p();           // probe radius
@@ -40,13 +41,13 @@ void charge_deposition(double *d_rho, particle *d_e, int num_e, particle *d_i, i
   // set size of shared memory for particle_to_grid kernel
   sh_mem_size = nn*sizeof(double);
 
-  // set dimensions of grid of blocks and block of threads for particle_to_grid kernel (electrons)
-  blockdim = CHARGE_DEP_BLOCK_DIM;
-  griddim = int(num_e/CHARGE_DEP_BLOCK_DIM)+1;
+  // set dimensions of grid of blocks and blocks of threads for virtual_to_grid kernel
+  blockdim = JACOBI_BLOCK_DIM;
+  griddim = (int) ((nn-2)/JACOBI_BLOCK_DIM) + 1;
   
-  // call to particle_to_grid kernel (electrons)
+  // call to virtual_to_grid kernel (electrons)
   cudaGetLastError();
-  particle_to_grid<<<griddim, blockdim, sh_mem_size>>>(nn, ds, l_p, r_p, theta, d_rho, d_e, num_e, -1.0);
+  virtual_to_grid<<<griddim, blockdim>>>(nn, ds, l_p, r_p, theta, d_rho, d_phi, n, -1.0);
   cu_sync_check(__FILE__, __LINE__);
 
   // set dimensions of grid of blocks and block of threads for particle_to_grid kernel (ions)
@@ -225,6 +226,35 @@ __global__ void particle_to_grid(int nn, double ds, double l_p, double r_p, doub
 }
 
 /**********************************************************/
+
+__global__ void virtual_to_grid(int nn, double ds, double l_p, double r_p, double theta, double *g_rho, 
+                                double *g_phi, double n, double q)
+{
+  /*--------------------------- kernel variables -----------------------*/
+  
+  // kernel shared memory
+  
+  // kernel registers
+  double reg_phi, reg_rho;
+  int g_tid = (int) (threadIdx.x + blockDim.x * blockIdx.x) + 1;
+  
+  /*------------------------------ kernel body --------------------------*/
+  
+  // load phi data from global to shared memory
+  if (g_tid < nn - 1) reg_phi = g_phi[g_tid];
+
+  //--- deposition of charge
+  reg_rho = n*exp(reg_phi)*q;
+
+  //---- store virtual charge in global memory
+  if (g_tid < nn - 1) g_rho[g_tid] = reg_rho;
+  __syncthreads();
+
+  return;
+}
+
+/**********************************************************/
+
 
 __global__ void jacobi_iteration (int nn, double ds, double r_p, double epsilon0, double *g_rho, double *g_phi, double *g_error)
 {

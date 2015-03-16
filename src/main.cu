@@ -34,13 +34,11 @@ int main (int argc, const char* argv[])
   const int n_prev = init_n_prev();     // number of iterations before start analizing
   const int n_save = init_n_save();     // number of iterations between diagnostics
   const int n_fin = init_n_fin();       // number of last iteration
-  int num_e, num_i;                     // number of particles (electrons and ions)
+  int num_i;                            // number of particles (electrons and ions)
   int nn = init_nn();                   // number of nodes
-  double U_e, U_i;                      // system energy for electrons and ions
+  double U_i;                           // system energy for electrons and ions
   double mi = init_mi();                // ion mass
-  double dtin_e = init_dtin_e();        // time between electron insertions
   double dtin_i = init_dtin_i();        // time between ion insertions
-  double q_pe = 0;                      // probe's negative acumulated charge (electrons)
   double q_pi = 0;                      // probe's positive acumulated charge (ions)
   double vd_i = init_vd_i();            // ion's drift velocity
   char filename[50];                    // filename for saved data
@@ -51,18 +49,14 @@ int main (int argc, const char* argv[])
   // device variables definition
   double *d_rho, *d_phi, *d_E;              // mesh properties
   double *d_avg_rho, *d_avg_phi, *d_avg_E;  // mesh averaged properties
-  double *d_avg_ddf_e, *d_avg_vdf_e;        // density and velocity distribution function for electrons
-  double v_max_e = init_v_max_e();          // maximun velocity of electrons (for histograms)
-  double v_min_e = init_v_min_e();          // minimun velocity of electrons (for histograms)
   double *d_avg_ddf_i, *d_avg_vdf_i;        // density and velocity distribution function for ions
   double v_max_i = init_v_max_i();          // maximun velocity of ions (for histograms)
   double v_min_i = init_v_min_i();          // minimun velocity of ions (for histograms)
-  int count_df_e = 0;                       // |
   int count_df_i = 0;                       // |
   int count_rho = 0;                        // |-> counters for avg data
   int count_phi = 0;                        // |
   int count_E = 0;                          // |
-  particle *d_e, *d_i;                      // particles vectors
+  particle *d_i;                            // particles vectors
   curandStatePhilox4_32_10_t *state;        // philox state for __device__ random number generation 
 
   /*----------------------------- function body -------------------------*/
@@ -71,12 +65,9 @@ int main (int argc, const char* argv[])
 
   // initialize device and simulation variables
   init_dev();
-  init_sim(&d_rho, &d_phi, &d_E, &d_avg_rho, &d_avg_phi, &d_avg_E, &d_e, &num_e, &d_i, &num_i, 
-           &d_avg_ddf_e, &d_avg_vdf_e, &d_avg_ddf_i, &d_avg_vdf_i, &t, &state);
+  init_sim(&d_rho, &d_phi, &d_E, &d_avg_rho, &d_avg_phi, &d_avg_E, &d_i, &num_i, &d_avg_ddf_i, &d_avg_vdf_i, &t, &state);
 
   // save initial state
-  sprintf(filename, "../output/particles/electrons_t_%d", n_ini);
-  particles_snapshot(d_e, num_e, filename);
   sprintf(filename, "../output/particles/ions_t_%d", n_ini);
   particles_snapshot(d_i, num_i, filename);
   sprintf(filename, "../output/charge/avg_charge_t_%d", n_ini);
@@ -91,24 +82,21 @@ int main (int argc, const char* argv[])
   
   for (int i = n_ini+1; i <= n_fin; i++, t += dt) {
     // simulate one time step
-    charge_deposition(d_rho, d_e, num_e, d_i, num_i);
+    charge_deposition(d_rho, d_phi, d_i, num_i);
     poisson_solver(1.0e-4, d_rho, d_phi);
     field_solver(d_phi, d_E);
-    particle_mover(d_e, num_e, d_i, num_i, d_E);
-    cc(t, &num_e, &d_e, &dtin_e, &num_i, &d_i, &dtin_i, &vd_i, &q_pe, &q_pi, d_phi, d_E, state);
+    particle_mover(d_i, num_i, d_E);
+    cc(t, &num_i, &d_i, &dtin_i, &vd_i, &q_pi, d_phi, d_E, state);
 
     // average mesh variables and distribution functions
     avg_mesh(d_rho, d_avg_rho, &count_rho);
     avg_mesh(d_phi, d_avg_phi, &count_phi);
     avg_mesh(d_E, d_avg_E, &count_E);
-    eval_df(d_avg_ddf_e, d_avg_vdf_e, v_max_e, v_min_e, d_e, num_e, &count_df_e);
     eval_df(d_avg_ddf_i, d_avg_vdf_i, v_max_i, v_min_i, d_i, num_i, &count_df_i);
 
     // store data
     if (i>=n_prev && i%n_save==0) {
       // save particles (snapshot)
-      sprintf(filename, "../output/particles/electrons_t_%d", i);
-      particles_snapshot(d_e, num_e, filename);
       sprintf(filename, "../output/particles/ions_t_%d", i);
       particles_snapshot(d_i, num_i, filename);
 
@@ -121,19 +109,14 @@ int main (int argc, const char* argv[])
       save_mesh(d_avg_E, filename);
 
       // save distribution functions
-      sprintf(filename, "../output/particles/electrons_ddf_t_%d", i);
-      save_ddf(d_avg_ddf_e, filename);
       sprintf(filename, "../output/particles/ions_ddf_t_%d", i);
       save_ddf(d_avg_ddf_i, filename);
-      sprintf(filename, "../output/particles/electrons_vdf_t_%d", i);
-      save_vdf(d_avg_vdf_e, v_max_e, v_min_e, filename);
       sprintf(filename, "../output/particles/ions_vdf_t_%d", i);
       save_vdf(d_avg_vdf_i, v_max_i, v_min_i, filename);
 
       // save log
-      U_e = eval_particle_energy(d_phi,  d_e, 1.0, -1.0, num_e);
       U_i = eval_particle_energy(d_phi,  d_i, mi, 1.0, num_i);
-      save_log(t, num_e, num_i, U_e, U_i, &q_pe, &q_pi, vd_i, d_phi);
+      save_log(t, num_i, U_i, &q_pi, vd_i, d_phi);
 
       cout << "iteration = " << i << endl;
     }
