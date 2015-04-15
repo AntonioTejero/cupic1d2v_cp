@@ -14,7 +14,7 @@
 /********************* HOST FUNCTION DEFINITIONS *********************/
 
 void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, particle **d_i, double *dtin_i, 
-         double *vd_i, double *q_pe, double *q_pi, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state)
+         double *vd_i, double *q_pe, double *q_pi, double *d_phi, double *d_E, curandStatePhilox4_32_10_t *state) 
 {
   /*--------------------------- function variables -----------------------*/
 
@@ -48,11 +48,11 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
   
   //---- electrons contour conditions
   
-  abs_emi_cc(t, &tin_e, *dtin_e, kte, vd_e, me, -1.0, q_pe, num_e, d_e, d_E, state);
+  abs_emi_cc(t, &tin_e, *dtin_e, kte, me, vd_e, -1.0, q_pe, num_e, d_e, d_E, state);
 
   //---- ions contour conditions
 
-  abs_emi_cc(t, &tin_i, *dtin_i, kti, *vd_i, mi, +1.0, q_pi, num_i, d_i, d_E, state);
+  abs_emi_cc(t, &tin_i, *dtin_i, kti, mi, *vd_i, +1.0, q_pi, num_i, d_i, d_E, state);
 
   //---- actualize probe potential because of the change in charge collected by the probe
   if (fp_is_on) {
@@ -74,7 +74,7 @@ void cc (double t, int *num_e, particle **d_e, double *dtin_e, int *num_i, parti
 
 /**********************************************************/
 
-void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double m, double q, double *q_p, 
+void abs_emi_cc(double t, double *tin, double dtin, double kt, double m, double vd, double q, double *q_p, 
                 int *h_num_p, particle **d_p, double *d_E, curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- function variables -----------------------*/
@@ -91,6 +91,11 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
   
   int in = 0;                             // number of particles added at plasma frontier
   int h_num_abs_p;                        // host number of particles absorved at the probe
+  
+  double dv;                              //
+  int i;                                  // variables for 
+  double xmax, ymax, y1, y2;              // rejection method
+  double vth = sqrt(kt/m);                //
   
   cudaError cuError;                      // cuda error variable
   dim3 griddim, blockdim;                 // kernel execution configurations 
@@ -157,13 +162,32 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double vd, double
   
   // add particles
   if (in != 0) {
+    // prepare rejection algorithm for particle velocity generation in case it's needed
+    if (vd != 0.0) {
+      dv = (vth>fabs(vd)) ? vth/100.0 : fabs(vd)/100.0; 
+      i = 0;
+      y1 = host_vdf(double(i)*dv, vth, fabs(vd));
+      do {
+        y2 = host_vdf(double(i+1)*dv, vth, fabs(vd));
+        ymax = (y1>y2) ? y1 : y2;
+        i++;
+        y1 = y2;
+      } while (ymax==y2);
+      do {
+        y2 = host_vdf(double(i+1)*dv, vth, fabs(vd));
+        i++;
+      } while (y2>0.001*ymax);
+      ymax *= 1.05;
+      xmax = double(i)*dv;
+    }
+
     // execution configuration for pEmi kernel
     griddim = 1;
     blockdim = CURAND_BLOCK_DIM;
 
     // launch kernel to add particles
     cudaGetLastError();
-    pEmi<<<griddim, blockdim>>>(*d_p, *h_num_p, in, d_E, sqrt(kt/m), vd, q/m, nn, L, r_p, fpt, fvt, *tin, dtin, state);
+    pEmi<<<griddim, blockdim>>>(*d_p, *h_num_p, in, d_E, vth, vd, q/m, nn, L, r_p, fpt, fvt, *tin, dtin, xmax, ymax, state);
     cu_sync_check(__FILE__, __LINE__);
 
     // actualize time for next particle insertion
@@ -256,10 +280,26 @@ void calibrate_ion_flux(double *vd_i, double *dtin_i, double *dtin_e, double *d_
  return;
 }
 
+/**********************************************************/
+
+inline double host_vdf(double v, double vth, double vd)
+{
+  /*--------------------------- function variables -----------------------*/
+  
+  // host variables definition
+  
+  // device variables definition
+  
+  /*----------------------------- function body -------------------------*/
+  
+  return v*exp(-(v-vd)*(v-vd)/(2.0*vth*vth));
+}
+
+
 /******************** DEVICE KERNELS DEFINITIONS *********************/
 
 __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth, double vd, double qm, int nn, 
-                     double L, double r_p, double fpt, double fvt, double tin, double dtin, 
+                     double L, double r_p, double fpt, double fvt, double tin, double dtin, double xmax, double ymax, 
                      curandStatePhilox4_32_10_t *state)
 {
   /*--------------------------- kernel variables -----------------------*/
@@ -287,10 +327,21 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
 
   //---- generate particles
   for (int i = tid; i < n_in; i+=tpb) {
-    // generate register particles
+    // generate register particles position
     reg_p.r = L;
-    rnd = curand_normal2_double(&local_state);
-    reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth+vd;
+    // generate register particles radial velocity
+    if (vd == 0.0) {
+      rnd = curand_normal2_double(&local_state);
+      reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth;
+    } else {
+      do {
+        rnd = curand_uniform2_double(&local_state);
+        rnd.x *= xmax;
+        rnd.y *= ymax;
+      } while (rnd.y > device_vdf(rnd.x, vth, fabs(vd)));
+      reg_p.vr = copysignf(rnd.x, vd);
+    }
+    // generate register particles tangential velocity
     rnd = curand_normal2_double(&local_state);
     reg_p.vt = rnd.x*vth;
     
@@ -387,3 +438,15 @@ __global__ void pRemover (particle *g_p, int *g_num_p, double L, int *g_num_abs_
 }
 
 /**********************************************************/
+
+__device__ inline double device_vdf(double v, double vth, double vd)
+{
+  /*--------------------------- function variables -----------------------*/
+  
+  /*----------------------------- function body -------------------------*/
+  
+  return v*exp(-(v-vd)*(v-vd)/(2.0*vth*vth));
+}
+
+/**********************************************************/
+
