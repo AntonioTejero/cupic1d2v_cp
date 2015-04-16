@@ -843,6 +843,55 @@ bool flux_calibration_is_on(void)
 }
 
 /**********************************************************/
+
+double init_increment(void)
+{
+  // function variables
+  static double increment = -1;
+  
+  // function body
+  
+  if (increment < 0) {
+    read_input_file(&increment, 34);
+  }
+  
+  return increment;
+}
+
+/**********************************************************/
+
+int init_avg_nodes(void)
+{
+  // function variables
+  static int avg_nodes = -1;
+  
+  // function body
+  
+  if (avg_nodes < 0) {
+    read_input_file(&avg_nodes, 35);
+  }
+  
+  return avg_nodes;
+}
+
+/**********************************************************/
+
+double init_field_tol(void)
+{
+  // function variables
+  static double tol = -1;
+  
+  // function body
+  
+  if (tol < 0) {
+    read_input_file(&tol, 36);
+  }
+  
+  return tol;
+}
+
+/**********************************************************/
+
 double init_dtin_e(void)
 {
   // function variables

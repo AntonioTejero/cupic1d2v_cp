@@ -31,3 +31,6 @@ min_v_i = -0.3;
 floating_potential = 0;
 #calibration configuration
 calibrate_ion_flux = 0;
+increment = 1.0e-5;
+avg_nodes = 5;
+field_tol = 1.0e-2;
