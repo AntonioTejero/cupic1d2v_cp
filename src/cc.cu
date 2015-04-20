@@ -157,7 +157,7 @@ void abs_emi_cc(double t, double *tin, double dtin, double kt, double m, double 
   // add particles
   if (in != 0) {
     // prepare rejection algorithm for particle velocity generation in case it's needed
-    if (vd != 0.0) {
+    if (vd != 0.0 && vth != 0.0) {
       dv = (vth>fabs(vd)) ? vth/100.0 : fabs(vd)/100.0; 
       i = 0;
       y1 = host_vdf(double(i)*dv, vth, fabs(vd));
@@ -320,14 +320,17 @@ __global__ void pEmi(particle *g_p, int num_p, int n_in, double *g_E, double vth
     if (vd == 0.0) {
       rnd = curand_normal2_double(&local_state);
       reg_p.vr = -sqrt(rnd.x*rnd.x+rnd.y*rnd.y)*vth;
-    } else {
+    } else if (vth != 0.0 ) {
       do {
         rnd = curand_uniform2_double(&local_state);
         rnd.x *= xmax;
         rnd.y *= ymax;
       } while (rnd.y > device_vdf(rnd.x, vth, fabs(vd)));
       reg_p.vr = copysignf(rnd.x, vd);
+    } else {
+      reg_p.vr = vd;
     }
+
     // generate register particles tangential velocity
     rnd = curand_normal2_double(&local_state);
     reg_p.vt = rnd.x*vth;
