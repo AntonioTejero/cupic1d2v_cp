@@ -124,24 +124,6 @@ int main (int argc, const char* argv[])
 
   //---- END OF SIMULATION
 
-  // update input data file and finish simulation
-  ifile.open("../input/input_data");
-  ofile.open("../input/input_data_new");
-  if (ifile.is_open() && ofile.is_open()) {
-    ifile.getline(filename, 50);
-    ofile << filename << endl;
-    ifile.getline(filename, 50);
-    ofile << "n_ini = " << n_fin << ";" << endl;
-    ifile.getline(filename, 50);
-    while (!ifile.eof()) {
-      ofile << filename << endl;
-      ifile.getline(filename, 50);
-    }
-  }
-  ifile.close();
-  ofile.close();
-  system("mv ../input/input_data_new ../input/input_data");
-  
   cout << "Simulation finished!" << endl;
   return 0;
 }
