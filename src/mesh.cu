@@ -236,18 +236,18 @@ __global__ void virtual_to_grid(int nn, double ds, double l_p, double r_p, doubl
   
   // kernel registers
   double reg_phi, reg_rho;
-  int g_tid = (int) (threadIdx.x + blockDim.x * blockIdx.x) + 1;
+  int g_tid = (int) (threadIdx.x + blockDim.x * blockIdx.x);
   
   /*------------------------------ kernel body --------------------------*/
   
   // load phi data from global to shared memory
-  if (g_tid < nn - 1) reg_phi = g_phi[g_tid];
+  if (g_tid < nn) reg_phi = g_phi[g_tid];
 
   //--- deposition of charge
   reg_rho = n*exp(reg_phi)*q;
 
   //---- store virtual charge in global memory
-  if (g_tid < nn - 1) g_rho[g_tid] = reg_rho;
+  if (g_tid < nn) g_rho[g_tid] = reg_rho;
   __syncthreads();
 
   return;
